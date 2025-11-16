@@ -11,15 +11,25 @@ import {
   AlertCircle,
   CheckCircle,
   Bot,
-  User as UserIcon
+  User as UserIcon,
+  Plus,
+  MessageSquare,
+  Edit3,
+  X,
+  Image as ImageIcon
 } from 'lucide-react';
 
 const AIToolsPage = () => {
   const [activeTab, setActiveTab] = useState('chat');
+
+  // Chat state
+  const [conversations, setConversations] = useState([]);
+  const [currentConversationId, setCurrentConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const messagesEndRef = useRef(null);
 
   // ҚМЖ генерация state
@@ -41,24 +51,83 @@ const AIToolsPage = () => {
 
   const [generatedContent, setGeneratedContent] = useState(null);
 
+  // Load conversations on mount
   useEffect(() => {
-    // Load chat history from localStorage
-    const savedMessages = localStorage.getItem('chatHistory');
-    if (savedMessages) {
-      setMessages(JSON.parse(savedMessages));
+    const savedConversations = localStorage.getItem('eduhelp_conversations');
+    if (savedConversations) {
+      const parsed = JSON.parse(savedConversations);
+      setConversations(parsed);
+
+      // Load last conversation
+      if (parsed.length > 0) {
+        const lastConv = parsed[0];
+        setCurrentConversationId(lastConv.id);
+        setMessages(lastConv.messages);
+      }
     }
   }, []);
 
+  // Save conversations to localStorage
   useEffect(() => {
-    // Save chat history to localStorage
-    if (messages.length > 0) {
-      localStorage.setItem('chatHistory', JSON.stringify(messages));
+    if (conversations.length > 0) {
+      localStorage.setItem('eduhelp_conversations', JSON.stringify(conversations));
     }
+  }, [conversations]);
+
+  useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const createNewConversation = () => {
+    const newConv = {
+      id: Date.now().toString(),
+      title: 'Жаңа чат',
+      messages: [],
+      createdAt: new Date().toISOString()
+    };
+
+    setConversations(prev => [newConv, ...prev]);
+    setCurrentConversationId(newConv.id);
+    setMessages([]);
+  };
+
+  const switchConversation = (convId) => {
+    const conv = conversations.find(c => c.id === convId);
+    if (conv) {
+      setCurrentConversationId(convId);
+      setMessages(conv.messages);
+    }
+  };
+
+  const deleteConversation = (convId) => {
+    if (window.confirm('Чатты өшіруге сенімдісіз бе?')) {
+      const updatedConvs = conversations.filter(c => c.id !== convId);
+      setConversations(updatedConvs);
+
+      if (convId === currentConversationId) {
+        if (updatedConvs.length > 0) {
+          setCurrentConversationId(updatedConvs[0].id);
+          setMessages(updatedConvs[0].messages);
+        } else {
+          setCurrentConversationId(null);
+          setMessages([]);
+        }
+      }
+
+      if (updatedConvs.length === 0) {
+        localStorage.removeItem('eduhelp_conversations');
+      }
+    }
+  };
+
+  const updateConversationTitle = (convId, newTitle) => {
+    setConversations(prev => prev.map(c =>
+      c.id === convId ? { ...c, title: newTitle } : c
+    ));
   };
 
   const sendMessage = async (e) => {
@@ -72,7 +141,8 @@ const AIToolsPage = () => {
       timestamp: new Date().toISOString()
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setInputMessage('');
     setLoading(true);
     setError('');
@@ -80,7 +150,7 @@ const AIToolsPage = () => {
     try {
       const res = await axios.post('/api/ai/chat', {
         message: inputMessage,
-        history: messages.slice(-10) // Соңғы 10 хабар
+        history: messages.slice(-10)
       });
 
       const aiMessage = {
@@ -90,10 +160,108 @@ const AIToolsPage = () => {
         timestamp: new Date().toISOString()
       };
 
-      setMessages(prev => [...prev, aiMessage]);
+      const updatedMessages = [...newMessages, aiMessage];
+      setMessages(updatedMessages);
+
+      // Update conversation
+      if (currentConversationId) {
+        setConversations(prev => prev.map(c => {
+          if (c.id === currentConversationId) {
+            // Auto-generate title from first message
+            const title = c.messages.length === 0
+              ? inputMessage.slice(0, 30) + (inputMessage.length > 30 ? '...' : '')
+              : c.title;
+
+            return { ...c, messages: updatedMessages, title };
+          }
+          return c;
+        }));
+      } else {
+        // Create new conversation
+        const newConv = {
+          id: Date.now().toString(),
+          title: inputMessage.slice(0, 30) + (inputMessage.length > 30 ? '...' : ''),
+          messages: updatedMessages,
+          createdAt: new Date().toISOString()
+        };
+        setConversations(prev => [newConv, ...prev]);
+        setCurrentConversationId(newConv.id);
+      }
+
     } catch (error) {
       console.error('Chat қатесі:', error);
-      setError(error.response?.data?.message || 'Gemini API қатесі. Әкімші API кілтін қосқанына көз жеткізіңіз.');
+      setError(error.response?.data?.message || 'Қате орын алды. Backend іске қосылғанына көз жеткізіңіз.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generateImage = async () => {
+    if (!inputMessage.trim()) return;
+
+    const userMessage = {
+      id: Date.now(),
+      role: 'user',
+      content: inputMessage,
+      type: 'image_request',
+      timestamp: new Date().toISOString()
+    };
+
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+    setInputMessage('');
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await axios.post('/api/ai/generate-image', {
+        prompt: inputMessage
+      });
+
+      const aiMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: res.data.message || 'Сурет дайын!',
+        imageUrl: res.data.imageUrl,
+        type: 'image',
+        timestamp: new Date().toISOString()
+      };
+
+      const updatedMessages = [...newMessages, aiMessage];
+      setMessages(updatedMessages);
+
+      // Update conversation
+      if (currentConversationId) {
+        setConversations(prev => prev.map(c => {
+          if (c.id === currentConversationId) {
+            const title = c.messages.length === 0
+              ? '🎨 ' + inputMessage.slice(0, 27) + (inputMessage.length > 27 ? '...' : '')
+              : c.title;
+
+            return { ...c, messages: updatedMessages, title };
+          }
+          return c;
+        }));
+      } else {
+        // Create new conversation
+        const newConv = {
+          id: Date.now().toString(),
+          title: '🎨 ' + inputMessage.slice(0, 27) + (inputMessage.length > 27 ? '...' : ''),
+          messages: updatedMessages,
+          createdAt: new Date().toISOString()
+        };
+        setConversations(prev => [newConv, ...prev]);
+        setCurrentConversationId(newConv.id);
+      }
+
+    } catch (error) {
+      console.error('Сурет генерация қатесі:', error);
+
+      if (error.response?.data?.isLoading) {
+        setError('Модель жүктелуде. 20 секундтан кейін қайталап көріңіз.');
+      } else {
+        setError(error.response?.data?.message || 'Сурет генерация қатесі. HUGGINGFACE_API_KEY қосылғанына көз жеткізіңіз.');
+      }
     } finally {
       setLoading(false);
     }
@@ -131,7 +299,8 @@ const AIToolsPage = () => {
       setGeneratedContent({
         type: 'presentation',
         content: res.data.content,
-        filename: res.data.filename
+        filename: res.data.filename,
+        pptxUrl: res.data.pptxUrl // Backend will generate .pptx file
       });
     } catch (error) {
       console.error('Презентация генерация қатесі:', error);
@@ -155,11 +324,9 @@ const AIToolsPage = () => {
     window.URL.revokeObjectURL(url);
   };
 
-  const clearChat = () => {
-    if (window.confirm('Чат тарихын өшіруге сенімдісіз бе?')) {
-      setMessages([]);
-      localStorage.removeItem('chatHistory');
-    }
+  const downloadPPTX = () => {
+    if (!generatedContent?.pptxUrl) return;
+    window.open(generatedContent.pptxUrl, '_blank');
   };
 
   return (
@@ -172,7 +339,7 @@ const AIToolsPage = () => {
           </div>
           <div>
             <h1 className="text-3xl font-bold gradient-text">AI Нейросеть</h1>
-            <p className="text-gray-600">Google Gemini арқылы материалдар жасау</p>
+            <p className="text-gray-600">Edu-help Боты арқылы материалдар жасау</p>
           </div>
         </div>
       </div>
@@ -216,116 +383,222 @@ const AIToolsPage = () => {
         </div>
       </div>
 
-      {/* Content */}
+      {/* Chat Tab */}
       {activeTab === 'chat' && (
-        <div className="glass-card p-6">
-          {/* Chat header */}
-          <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
-            <h2 className="text-xl font-bold">ChatGPT сияқты чат</h2>
-            {messages.length > 0 && (
-              <button
-                onClick={clearChat}
-                className="flex items-center space-x-2 text-red-600 hover:text-red-700 transition-colors"
-              >
-                <Trash2 className="h-4 w-4" />
-                <span className="text-sm">Тарихты өшіру</span>
-              </button>
-            )}
-          </div>
-
-          {/* Messages */}
-          <div className="h-[500px] overflow-y-auto mb-4 space-y-4 p-4 bg-gray-50 rounded-lg">
-            {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                <Bot className="h-16 w-16 mb-4" />
-                <p className="text-lg font-medium">Gemini-мен сөйлесуді бастаңыз</p>
-                <p className="text-sm">Кез келген сұрақ қойыңыз немесе материал сұраңыз</p>
+        <div className="flex gap-4">
+          {/* Sidebar */}
+          {sidebarOpen && (
+            <div className="w-80 glass-card p-4 flex flex-col" style={{ height: '600px' }}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-lg">Чаттар</h3>
+                <button
+                  onClick={createNewConversation}
+                  className="p-2 hover:bg-primary-100 rounded-lg transition-colors"
+                  title="Жаңа чат"
+                >
+                  <Plus className="h-5 w-5 text-primary-600" />
+                </button>
               </div>
-            ) : (
-              <>
-                {messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`flex items-start space-x-3 ${
-                      msg.role === 'user' ? 'justify-end' : 'justify-start'
-                    }`}
-                  >
-                    {msg.role === 'assistant' && (
-                      <div className="bg-gradient-to-br from-primary-500 to-secondary-500 p-2 rounded-full flex-shrink-0">
-                        <Bot className="h-5 w-5 text-white" />
-                      </div>
-                    )}
-                    <div
-                      className={`max-w-[70%] rounded-lg p-4 ${
-                        msg.role === 'user'
-                          ? 'bg-primary-500 text-white'
-                          : 'bg-white border border-gray-200 text-gray-800'
-                      }`}
-                    >
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
-                      <p className={`text-xs mt-2 ${
-                        msg.role === 'user' ? 'text-primary-100' : 'text-gray-400'
-                      }`}>
-                        {new Date(msg.timestamp).toLocaleTimeString('kk-KZ')}
-                      </p>
-                    </div>
-                    {msg.role === 'user' && (
-                      <div className="bg-gray-600 p-2 rounded-full flex-shrink-0">
-                        <UserIcon className="h-5 w-5 text-white" />
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {loading && (
-                  <div className="flex items-start space-x-3">
-                    <div className="bg-gradient-to-br from-primary-500 to-secondary-500 p-2 rounded-full">
-                      <Bot className="h-5 w-5 text-white" />
-                    </div>
-                    <div className="bg-white border border-gray-200 rounded-lg p-4">
-                      <div className="flex items-center space-x-2">
-                        <Loader className="h-5 w-5 animate-spin text-primary-500" />
-                        <span className="text-gray-600">Жазып жатыр...</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div ref={messagesEndRef} />
-              </>
-            )}
-          </div>
 
-          {/* Error */}
-          {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-2">
-              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-red-800">{error}</p>
-                <p className="text-sm text-red-600 mt-1">
-                  Әкімші Gemini API кілтін жүйеге қосуы керек (.env файлында)
-                </p>
+              <div className="flex-1 overflow-y-auto space-y-2">
+                {conversations.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-8">
+                    Әлі чат жоқ
+                  </p>
+                ) : (
+                  conversations.map(conv => (
+                    <div
+                      key={conv.id}
+                      className={`p-3 rounded-lg cursor-pointer transition-colors group ${
+                        conv.id === currentConversationId
+                          ? 'bg-primary-100 border border-primary-300'
+                          : 'hover:bg-gray-100'
+                      }`}
+                      onClick={() => switchConversation(conv.id)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start space-x-2 flex-1">
+                          <MessageSquare className="h-4 w-4 mt-1 text-gray-500 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">
+                              {conv.title}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {conv.messages.length} хабар
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteConversation(conv.id);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded transition-opacity"
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
 
-          {/* Input */}
-          <form onSubmit={sendMessage} className="flex space-x-3">
-            <input
-              type="text"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              placeholder="Хабарламаңызды жазыңыз..."
-              className="input-field flex-1"
-              disabled={loading}
-            />
-            <button
-              type="submit"
-              disabled={loading || !inputMessage.trim()}
-              className="btn-primary flex items-center space-x-2 disabled:opacity-50"
-            >
-              <Send className="h-5 w-5" />
-              <span>Жіберу</span>
-            </button>
-          </form>
+          {/* Chat Area */}
+          <div className="flex-1 glass-card p-6">
+            {/* Chat header */}
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
+              <div className="flex items-center space-x-3">
+                <div className="bg-gradient-to-br from-primary-500 to-secondary-500 p-2 rounded-full">
+                  <Bot className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold">Edu-help Боты</h2>
+                  <p className="text-xs text-gray-500">Білім беру көмекшісі</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                {sidebarOpen ? <X className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
+              </button>
+            </div>
+
+            {/* Messages */}
+            <div className="h-[450px] overflow-y-auto mb-4 space-y-4 p-4 bg-gray-50 rounded-lg">
+              {messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-gray-400">
+                  <Bot className="h-16 w-16 mb-4" />
+                  <p className="text-lg font-medium">Edu-help Ботымен сөйлесуді бастаңыз</p>
+                  <p className="text-sm">Кез келген сұрақ қойыңыз немесе материал сұраңыз</p>
+                </div>
+              ) : (
+                <>
+                  {messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex items-start space-x-3 ${
+                        msg.role === 'user' ? 'justify-end' : 'justify-start'
+                      }`}
+                    >
+                      {msg.role === 'assistant' && (
+                        <div className="bg-gradient-to-br from-primary-500 to-secondary-500 p-2 rounded-full flex-shrink-0">
+                          <Bot className="h-5 w-5 text-white" />
+                        </div>
+                      )}
+                      <div
+                        className={`max-w-[70%] rounded-lg p-4 ${
+                          msg.role === 'user'
+                            ? 'bg-primary-500 text-white'
+                            : 'bg-white border border-gray-200 text-gray-800'
+                        }`}
+                      >
+                        {msg.role === 'assistant' && (
+                          <p className="text-xs font-semibold mb-2 text-primary-600">
+                            Edu-help Боты
+                          </p>
+                        )}
+                        {msg.type === 'image_request' && (
+                          <div className="flex items-center space-x-2 mb-2">
+                            <ImageIcon className="h-4 w-4" />
+                            <span className="text-sm font-medium">Сурет сұрауы:</span>
+                          </div>
+                        )}
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                        {msg.imageUrl && (
+                          <div className="mt-3">
+                            <img
+                              src={`http://localhost:5000${msg.imageUrl}`}
+                              alt="Generated"
+                              className="rounded-lg max-w-full h-auto border-2 border-gray-200"
+                              style={{ maxHeight: '400px' }}
+                            />
+                            <a
+                              href={`http://localhost:5000${msg.imageUrl}`}
+                              download
+                              className="inline-flex items-center space-x-2 mt-2 text-sm text-primary-600 hover:text-primary-700"
+                            >
+                              <Download className="h-4 w-4" />
+                              <span>Жүктеу</span>
+                            </a>
+                          </div>
+                        )}
+                        <p className={`text-xs mt-2 ${
+                          msg.role === 'user' ? 'text-primary-100' : 'text-gray-400'
+                        }`}>
+                          {new Date(msg.timestamp).toLocaleTimeString('kk-KZ')}
+                        </p>
+                      </div>
+                      {msg.role === 'user' && (
+                        <div className="bg-gray-600 p-2 rounded-full flex-shrink-0">
+                          <UserIcon className="h-5 w-5 text-white" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {loading && (
+                    <div className="flex items-start space-x-3">
+                      <div className="bg-gradient-to-br from-primary-500 to-secondary-500 p-2 rounded-full">
+                        <Bot className="h-5 w-5 text-white" />
+                      </div>
+                      <div className="bg-white border border-gray-200 rounded-lg p-4">
+                        <p className="text-xs font-semibold mb-2 text-primary-600">
+                          Edu-help Боты
+                        </p>
+                        <div className="flex items-center space-x-2">
+                          <Loader className="h-5 w-5 animate-spin text-primary-500" />
+                          <span className="text-gray-600">Жазып жатыр...</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </>
+              )}
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-2">
+                <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-red-800">{error}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Input */}
+            <form onSubmit={sendMessage} className="flex space-x-3">
+              <input
+                type="text"
+                value={inputMessage}
+                onChange={(e) => setInputMessage(e.target.value)}
+                placeholder="Хабарламаңызды жазыңыз..."
+                className="input-field flex-1"
+                disabled={loading}
+              />
+              <button
+                type="button"
+                onClick={generateImage}
+                disabled={loading || !inputMessage.trim()}
+                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Сурет жасау"
+              >
+                <ImageIcon className="h-5 w-5" />
+                <span className="hidden sm:inline">Сурет</span>
+              </button>
+              <button
+                type="submit"
+                disabled={loading || !inputMessage.trim()}
+                className="btn-primary flex items-center space-x-2 disabled:opacity-50"
+              >
+                <Send className="h-5 w-5" />
+                <span>Жіберу</span>
+              </button>
+            </form>
+          </div>
         </div>
       )}
 
@@ -541,14 +814,26 @@ const AIToolsPage = () => {
                     <CheckCircle className="h-5 w-5" />
                     <span className="font-semibold">Презентация дайын!</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={downloadContent}
-                    className="btn-primary flex items-center space-x-2"
-                  >
-                    <Download className="h-4 w-4" />
-                    <span>Жүктеу</span>
-                  </button>
+                  <div className="flex space-x-2">
+                    {generatedContent.pptxUrl && (
+                      <button
+                        type="button"
+                        onClick={downloadPPTX}
+                        className="btn-primary flex items-center space-x-2"
+                      >
+                        <Download className="h-4 w-4" />
+                        <span>.PPTX жүктеу</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={downloadContent}
+                      className="btn-secondary flex items-center space-x-2"
+                    >
+                      <Download className="h-4 w-4" />
+                      <span>.TXT жүктеу</span>
+                    </button>
+                  </div>
                 </div>
                 <div className="bg-white p-4 rounded-lg max-h-96 overflow-y-auto">
                   <pre className="whitespace-pre-wrap text-sm text-gray-800">
@@ -571,7 +856,7 @@ const AIToolsPage = () => {
               ) : (
                 <>
                   <Sparkles className="h-5 w-5" />
-                  <span>Презентация жасау</span>
+                  <span>Презентация жасау (.PPTX)</span>
                 </>
               )}
             </button>

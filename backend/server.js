@@ -24,6 +24,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // Статикалық файлдарға қол жеткізу
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/presentations', express.static(path.join(__dirname, 'public/presentations')));
+app.use('/images', express.static(path.join(__dirname, 'public/images')));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));

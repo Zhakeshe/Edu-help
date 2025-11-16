@@ -2,9 +2,23 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const { protect } = require('../middleware/auth');
+const PptxGenJS = require('pptxgenjs');
+const fs = require('fs');
+const path = require('path');
 
-// Gemini API кілті (әкімші .env файлына қосады)
+// API кілттері
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
+
+// Public папкаларын жасау
+const presentationsDir = path.join(__dirname, '../public/presentations');
+const imagesDir = path.join(__dirname, '../public/images');
+if (!fs.existsSync(presentationsDir)) {
+  fs.mkdirSync(presentationsDir, { recursive: true });
+}
+if (!fs.existsSync(imagesDir)) {
+  fs.mkdirSync(imagesDir, { recursive: true });
+}
 
 // Gemini API helper function
 async function callGemini(prompt, temperature = 0.7, maxTokens = 2048) {
@@ -14,7 +28,7 @@ async function callGemini(prompt, temperature = 0.7, maxTokens = 2048) {
 
   try {
     const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`,
       {
         contents: [{
           parts: [{
@@ -135,7 +149,7 @@ ${objectives ? `Мақсаттар: ${objectives}` : ''}
 });
 
 // @route   POST /api/ai/generate-presentation
-// @desc    Презентация мәтінін генерациялау
+// @desc    Презентация .PPTX генерациялау
 // @access  Private
 router.post('/generate-presentation', protect, async (req, res) => {
   try {
@@ -148,43 +162,181 @@ router.post('/generate-presentation', protect, async (req, res) => {
       });
     }
 
+    // 1. Gemini-ден слайд мазмұнын алу
     const prompt = `
-Мына мәліметтерге сүйене отырып, презентация үшін слайд мәтіндерін жаса:
+Мына мәліметтерге сүйене отырып, ${slides} слайдтан тұратын презентацияны JSON форматында жаса:
 
 Пән: ${subject}
 Тақырып: ${theme}
-Слайдтар саны: ${slides}
 ${details ? `Қосымша ақпарат: ${details}` : ''}
 
-Әрбір слайд үшін:
-1. Слайд нөмірі және атауы
-2. Негізгі мазмұн (bullet points)
-3. Қосымша түсініктемелер
+МАҢЫЗДЫ: Жауапты МІНДЕТТІ түрде мына JSON форматында бер:
+{
+  "slides": [
+    {
+      "title": "Слайд атауы (қысқа)",
+      "content": [
+        "Бірінші пункт",
+        "Екінші пункт",
+        "Үшінші пункт"
+      ]
+    }
+  ]
+}
 
-Презентация оқушыларға түсінікті, визуалды және білім беру мақсатына сай болуы керек.
-Барлық мәтін қазақ тілінде болуы керек.
-
-Форматы:
-═══════════════════════
-СЛАЙД 1: [Атауы]
-═══════════════════════
-• [Негізгі тезис 1]
-• [Негізгі тезис 2]
-• [Негізгі тезис 3]
-
-Түсініктеме: [Қосымша ақпарат]
-
-[Келесі слайдтар...]
+Ережелер:
+- Дәл ${slides} слайд жаса
+- Әрбір слайдтың атауы қысқа болсын (5-8 сөз)
+- Әрбір слайдта 3-5 пункт болсын
+- Барлық мәтін қазақ тілінде
+- 1-слайд: Титулдық (тақырып)
+- Соңғы слайд: Қорытынды
+- Мәтін түсінікті және білім беру мақсатына сай
 `;
 
-    const content = await callGemini(prompt, 0.7, 4000);
+    const aiResponse = await callGemini(prompt, 0.7, 4000);
 
-    const filename = `${subject}_${theme.replace(/\s+/g, '_')}_презентация.txt`;
+    // JSON parse (Gemini кейде ```json ``` қосып жібереді, оны алып тастаймыз)
+    let jsonText = aiResponse.trim();
+    if (jsonText.startsWith('```json')) {
+      jsonText = jsonText.replace(/```json\n/, '').replace(/\n```$/, '');
+    } else if (jsonText.startsWith('```')) {
+      jsonText = jsonText.replace(/```\n/, '').replace(/\n```$/, '');
+    }
+
+    const slideData = JSON.parse(jsonText);
+
+    // 2. PPTX файл жасау
+    const pptx = new PptxGenJS();
+
+    // Presentation settings
+    pptx.author = 'Edu-help';
+    pptx.company = 'Edu-help Platform';
+    pptx.subject = subject;
+    pptx.title = theme;
+
+    // Theme colors
+    const primaryColor = '4F46E5';  // Indigo
+    const secondaryColor = '7C3AED'; // Purple
+    const textColor = '1F2937';     // Gray-800
+
+    slideData.slides.forEach((slideInfo, index) => {
+      const slide = pptx.addSlide();
+
+      // Background gradient
+      slide.background = { color: 'F9FAFB' };
+
+      if (index === 0) {
+        // Титулдық слайд
+        slide.addText(slideInfo.title, {
+          x: 0.5,
+          y: 2.0,
+          w: 9.0,
+          h: 1.5,
+          fontSize: 44,
+          bold: true,
+          color: primaryColor,
+          align: 'center',
+          valign: 'middle'
+        });
+
+        slide.addText(subject, {
+          x: 0.5,
+          y: 3.8,
+          w: 9.0,
+          h: 0.5,
+          fontSize: 24,
+          color: textColor,
+          align: 'center'
+        });
+
+        // Footer
+        slide.addText('Edu-help Platform', {
+          x: 0.5,
+          y: 5.0,
+          w: 9.0,
+          h: 0.3,
+          fontSize: 14,
+          color: '6B7280',
+          align: 'center',
+          italic: true
+        });
+      } else {
+        // Қалыпты слайдтар
+        // Header with gradient box
+        slide.addShape('rect', {
+          x: 0,
+          y: 0,
+          w: 10,
+          h: 1.0,
+          fill: { type: 'solid', color: primaryColor }
+        });
+
+        slide.addText(slideInfo.title, {
+          x: 0.5,
+          y: 0.25,
+          w: 9.0,
+          h: 0.5,
+          fontSize: 28,
+          bold: true,
+          color: 'FFFFFF',
+          align: 'left',
+          valign: 'middle'
+        });
+
+        // Content bullets
+        const bulletText = slideInfo.content.map(item => ({
+          text: item,
+          options: { bullet: true, fontSize: 18, color: textColor, paraSpaceBefore: 12 }
+        }));
+
+        slide.addText(bulletText, {
+          x: 1.0,
+          y: 1.8,
+          w: 8.0,
+          h: 3.5,
+          fontSize: 18,
+          color: textColor
+        });
+
+        // Slide number
+        slide.addText(`${index + 1} / ${slideData.slides.length}`, {
+          x: 8.5,
+          y: 5.2,
+          w: 1.0,
+          h: 0.3,
+          fontSize: 12,
+          color: '9CA3AF',
+          align: 'right'
+        });
+      }
+    });
+
+    // 3. Файлды сақтау
+    const timestamp = Date.now();
+    const pptxFilename = `${subject}_${theme.replace(/\s+/g, '_')}_${timestamp}.pptx`;
+    const pptxPath = path.join(presentationsDir, pptxFilename);
+
+    await pptx.writeFile({ fileName: pptxPath });
+
+    // 4. Text content (preview үшін)
+    let textContent = '';
+    slideData.slides.forEach((slideInfo, index) => {
+      textContent += `═══════════════════════\n`;
+      textContent += `СЛАЙД ${index + 1}: ${slideInfo.title}\n`;
+      textContent += `═══════════════════════\n`;
+      slideInfo.content.forEach(item => {
+        textContent += `• ${item}\n`;
+      });
+      textContent += `\n`;
+    });
 
     res.json({
       success: true,
-      content: content,
-      filename: filename
+      content: textContent,
+      filename: `${subject}_${theme.replace(/\s+/g, '_')}_презентация.txt`,
+      pptxUrl: `/presentations/${pptxFilename}`,
+      message: 'Презентация .PPTX форматында дайын!'
     });
 
   } catch (error) {
@@ -192,6 +344,72 @@ ${details ? `Қосымша ақпарат: ${details}` : ''}
     res.status(500).json({
       success: false,
       message: error.message || 'Презентация генерация қатесі'
+    });
+  }
+});
+
+// @route   POST /api/ai/generate-image
+// @desc    Сурет генерациялау (Hugging Face Stable Diffusion)
+// @access  Private
+router.post('/generate-image', protect, async (req, res) => {
+  try {
+    const { prompt } = req.body;
+
+    if (!prompt) {
+      return res.status(400).json({
+        success: false,
+        message: 'Сурет сипаттамасы қажет'
+      });
+    }
+
+    if (!HUGGINGFACE_API_KEY) {
+      return res.status(400).json({
+        success: false,
+        message: 'HUGGINGFACE_API_KEY .env файлында жоқ. Әкімші қосуы керек.'
+      });
+    }
+
+    // Hugging Face Inference API - Stable Diffusion
+    const response = await axios.post(
+      'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1',
+      { inputs: prompt },
+      {
+        headers: {
+          'Authorization': `Bearer ${HUGGINGFACE_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        responseType: 'arraybuffer'
+      }
+    );
+
+    // Суретті файлға сақтау
+    const timestamp = Date.now();
+    const imageFilename = `image_${timestamp}.png`;
+    const imagePath = path.join(imagesDir, imageFilename);
+
+    fs.writeFileSync(imagePath, response.data);
+
+    res.json({
+      success: true,
+      imageUrl: `/images/${imageFilename}`,
+      message: 'Сурет сәтті жасалды!'
+    });
+
+  } catch (error) {
+    console.error('Сурет генерация қатесі:', error.response?.data || error.message);
+
+    // Hugging Face model loading болуы мүмкін
+    if (error.response?.status === 503) {
+      return res.status(503).json({
+        success: false,
+        message: 'Модель жүктелуде. 20 секундтан кейін қайталап көріңіз.',
+        isLoading: true
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Сурет генерация қатесі'
     });
   }
 });
