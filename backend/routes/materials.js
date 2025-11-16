@@ -109,6 +109,34 @@ router.get('/', async (req, res) => {
   }
 });
 
+// @route   GET /api/materials/download/:id
+// @desc    Материалды жүктеп алу
+// @access  Public
+router.get('/download/:id', async (req, res) => {
+  try {
+    const material = await Material.findById(req.params.id);
+
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: 'Материал табылмады'
+      });
+    }
+
+    // Жүктеу санағышын көбейту
+    material.downloads += 1;
+    await material.save();
+
+    res.download(material.filePath, material.fileName);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Файлды жүктеу қатесі',
+      error: error.message
+    });
+  }
+});
+
 // @route   GET /api/materials/:id
 // @desc    Бір материалды алу
 // @access  Public
@@ -198,34 +226,6 @@ router.delete('/:id', protect, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Материалды өшіру қатесі',
-      error: error.message
-    });
-  }
-});
-
-// @route   GET /api/materials/download/:id
-// @desc    Материалды жүктеп алу
-// @access  Public
-router.get('/download/:id', async (req, res) => {
-  try {
-    const material = await Material.findById(req.params.id);
-
-    if (!material) {
-      return res.status(404).json({
-        success: false,
-        message: 'Материал табылмады'
-      });
-    }
-
-    // Жүктеу санағышын көбейту
-    material.downloads += 1;
-    await material.save();
-
-    res.download(material.filePath, material.fileName);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Файлды жүктеу қатесі',
       error: error.message
     });
   }
