@@ -16,42 +16,47 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [admin, setAdmin] = useState(null);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [token, setToken] = useState(localStorage.getItem('adminToken'));
+  const [token, setToken] = useState(localStorage.getItem('token'));
 
   // Axios-қа token қосу
   useEffect(() => {
     if (token) {
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      loadAdmin();
+      loadUser();
     } else {
       setLoading(false);
     }
   }, [token]);
 
-  // Админді жүктеу
-  const loadAdmin = async () => {
+  // Пайдаланушыны жүктеу
+  const loadUser = async () => {
     try {
-      const res = await axios.get('/api/auth/me');
-      setAdmin(res.data.data);
+      const res = await axios.get('/api/users/me');
+      setUser(res.data.data);
     } catch (error) {
-      console.error('Админді жүктеу қатесі:', error);
+      console.error('Пайдаланушыны жүктеу қатесі:', error);
       logout();
     } finally {
       setLoading(false);
     }
   };
 
-  // Логин
-  const login = async (username, password) => {
+  // Тіркелу (User)
+  const register = async (fullName, email, password) => {
     try {
-      const res = await axios.post('/api/auth/login', { username, password });
-      const { token, ...adminData } = res.data.data;
+      const res = await axios.post('/api/users/register', {
+        fullName,
+        email,
+        password
+      });
 
-      localStorage.setItem('adminToken', token);
+      const { token, ...userData } = res.data.data;
+
+      localStorage.setItem('token', token);
       setToken(token);
-      setAdmin(adminData);
+      setUser(userData);
 
       return { success: true };
     } catch (error) {
@@ -62,17 +67,53 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Тіркеу
-  const register = async (username, email, password) => {
+  // Кіру (User немесе Admin)
+  const login = async (email, password, isAdmin = false) => {
     try {
-      const res = await axios.post('/api/auth/register', { username, email, password });
-      const { token, ...adminData } = res.data.data;
+      const res = await axios.post('/api/users/login', {
+        email,
+        password,
+        isAdmin
+      });
 
-      localStorage.setItem('adminToken', token);
+      const { token, ...userData } = res.data.data;
+
+      localStorage.setItem('token', token);
       setToken(token);
-      setAdmin(adminData);
+      setUser(userData);
 
       return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Қате орын алды'
+      };
+    }
+  };
+
+  // Профильді жаңарту
+  const updateProfile = async (data) => {
+    try {
+      const res = await axios.put('/api/users/profile', data);
+      setUser(res.data.data);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || 'Қате орын алды'
+      };
+    }
+  };
+
+  // API кілттерін сақтау
+  const saveApiKeys = async (apiKeys) => {
+    try {
+      const res = await axios.put('/api/users/api-keys', apiKeys);
+      setUser({
+        ...user,
+        apiKeys: res.data.data.apiKeys
+      });
+      return { success: true, message: 'API кілттері сақталды!' };
     } catch (error) {
       return {
         success: false,
@@ -83,19 +124,22 @@ export const AuthProvider = ({ children }) => {
 
   // Шығу
   const logout = () => {
-    localStorage.removeItem('adminToken');
+    localStorage.removeItem('token');
     setToken(null);
-    setAdmin(null);
+    setUser(null);
     delete axios.defaults.headers.common['Authorization'];
   };
 
   const value = {
-    admin,
+    user,
     loading,
-    login,
     register,
+    login,
     logout,
-    isAuthenticated: !!admin
+    updateProfile,
+    saveApiKeys,
+    isAuthenticated: !!user,
+    isAdmin: user?.role === 'admin'
   };
 
   return (

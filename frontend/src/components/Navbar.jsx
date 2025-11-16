@@ -1,17 +1,19 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { BookOpen, Brain, LogOut, User, Menu, X } from 'lucide-react';
+import { BookOpen, Brain, LogOut, User, Menu, X, Settings, Shield } from 'lucide-react';
 import { useState } from 'react';
 
 const Navbar = () => {
-  const { admin, logout, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
     navigate('/');
     setMobileMenuOpen(false);
+    setProfileMenuOpen(false);
   };
 
   return (
@@ -34,38 +36,80 @@ const Navbar = () => {
             >
               Басты бет
             </Link>
-            <Link
-              to="/ai-tools"
-              className="flex items-center space-x-1 text-gray-700 hover:text-primary-600 font-medium transition-colors"
-            >
-              <Brain className="h-4 w-4" />
-              <span>AI Құралдар</span>
-            </Link>
+
+            {isAuthenticated && (
+              <>
+                <Link
+                  to="/ai-tools"
+                  className="flex items-center space-x-1 text-gray-700 hover:text-primary-600 font-medium transition-colors"
+                >
+                  <Brain className="h-4 w-4" />
+                  <span>AI Құралдар</span>
+                </Link>
+              </>
+            )}
 
             {isAuthenticated ? (
-              <div className="flex items-center space-x-4">
-                <Link
-                  to="/admin"
-                  className="flex items-center space-x-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors"
+              <div className="relative">
+                <button
+                  onClick={() => setProfileMenuOpen(!profileMenuOpen)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg hover:shadow-lg transition-all"
                 >
                   <User className="h-4 w-4" />
-                  <span>{admin?.username}</span>
-                </Link>
-                <button
-                  onClick={handleLogout}
-                  className="flex items-center space-x-2 px-4 py-2 border-2 border-red-500 text-red-500 rounded-lg hover:bg-red-500 hover:text-white transition-colors"
-                >
-                  <LogOut className="h-4 w-4" />
-                  <span>Шығу</span>
+                  <span>{user?.fullName?.split(' ')[0] || 'Профиль'}</span>
+                  {isAdmin && <Shield className="h-4 w-4" />}
                 </button>
+
+                {/* Dropdown */}
+                {profileMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-48 glass-card rounded-lg shadow-xl py-2">
+                    <Link
+                      to="/profile"
+                      onClick={() => setProfileMenuOpen(false)}
+                      className="flex items-center space-x-2 px-4 py-2 text-gray-700 hover:bg-primary-50 transition-colors"
+                    >
+                      <Settings className="h-4 w-4" />
+                      <span>Профиль</span>
+                    </Link>
+
+                    {isAdmin && (
+                      <Link
+                        to="/admin"
+                        onClick={() => setProfileMenuOpen(false)}
+                        className="flex items-center space-x-2 px-4 py-2 text-gray-700 hover:bg-primary-50 transition-colors"
+                      >
+                        <Shield className="h-4 w-4" />
+                        <span>Админ панель</span>
+                      </Link>
+                    )}
+
+                    <hr className="my-2 border-gray-200" />
+
+                    <button
+                      onClick={handleLogout}
+                      className="flex items-center space-x-2 w-full px-4 py-2 text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>Шығу</span>
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
-              <Link
-                to="/admin/login"
-                className="px-4 py-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg hover:shadow-lg transition-all"
-              >
-                Админ кіру
-              </Link>
+              <div className="flex items-center space-x-3">
+                <Link
+                  to="/auth"
+                  className="px-4 py-2 text-gray-700 hover:text-primary-600 font-medium transition-colors"
+                >
+                  Кіру
+                </Link>
+                <Link
+                  to="/auth"
+                  className="px-4 py-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg hover:shadow-lg transition-all"
+                >
+                  Тіркелу
+                </Link>
+              </div>
             )}
           </div>
 
@@ -84,7 +128,7 @@ const Navbar = () => {
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 space-y-2 border-t border-gray-200">
+          <div className="md:hidden py-4 space-y-2 border-t border-gray-200 animate-fade-in">
             <Link
               to="/"
               onClick={() => setMobileMenuOpen(false)}
@@ -92,23 +136,34 @@ const Navbar = () => {
             >
               Басты бет
             </Link>
-            <Link
-              to="/ai-tools"
-              onClick={() => setMobileMenuOpen(false)}
-              className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
-            >
-              AI Құралдар
-            </Link>
 
-            {isAuthenticated ? (
+            {isAuthenticated && (
               <>
                 <Link
-                  to="/admin"
+                  to="/ai-tools"
                   onClick={() => setMobileMenuOpen(false)}
                   className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
                 >
-                  Админ панель
+                  AI Құралдар
                 </Link>
+                <Link
+                  to="/profile"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+                >
+                  Профиль
+                </Link>
+
+                {isAdmin && (
+                  <Link
+                    to="/admin"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+                  >
+                    Админ панель
+                  </Link>
+                )}
+
                 <button
                   onClick={handleLogout}
                   className="block w-full text-left px-4 py-2 text-red-500 hover:bg-red-50 rounded-lg"
@@ -116,14 +171,25 @@ const Navbar = () => {
                   Шығу
                 </button>
               </>
-            ) : (
-              <Link
-                to="/admin/login"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block px-4 py-2 bg-primary-500 text-white rounded-lg text-center"
-              >
-                Админ кіру
-              </Link>
+            )}
+
+            {!isAuthenticated && (
+              <>
+                <Link
+                  to="/auth"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+                >
+                  Кіру
+                </Link>
+                <Link
+                  to="/auth"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block px-4 py-2 bg-primary-500 text-white rounded-lg text-center"
+                >
+                  Тіркелу
+                </Link>
+              </>
             )}
           </div>
         )}
