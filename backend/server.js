@@ -65,10 +65,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
+// Vercel serverless environment-те listen() қажет емес
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`
+  app.listen(PORT, () => {
+    console.log(`
     ╔════════════════════════════════════════╗
     ║                                        ║
     ║   🎓  EduHelp Backend Server          ║
@@ -77,7 +79,8 @@ app.listen(PORT, () => {
     ║   📚  Status: Running                  ║
     ║                                        ║
     ╚════════════════════════════════════════╝
-  `);
-});
+    `);
+  });
+}
 
 module.exports = app;
