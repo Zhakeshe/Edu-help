@@ -198,13 +198,31 @@ ${details ? `Қосымша ақпарат: ${details}` : ''}
 
     // JSON parse (Gemini кейде ```json ``` қосып жібереді, оны алып тастаймыз)
     let jsonText = aiResponse.trim();
-    if (jsonText.startsWith('```json')) {
-      jsonText = jsonText.replace(/```json\n/, '').replace(/\n```$/, '');
-    } else if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/```\n/, '').replace(/\n```$/, '');
+
+    // Remove markdown code blocks
+    jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+
+    let slideData;
+    try {
+      slideData = JSON.parse(jsonText);
+    } catch (parseError) {
+      console.error('JSON parse қатесі:', parseError);
+      console.error('AI жауабы:', aiResponse);
+
+      // Егер JSON parse болмаса, мәтін форматында қайтарамыз
+      return res.status(500).json({
+        success: false,
+        message: 'AI жауабын parse ету қатесі. Қайтадан көріңіз.',
+        debug: aiResponse.substring(0, 500)
+      });
     }
 
-    const slideData = JSON.parse(jsonText);
+    if (!slideData.slides || !Array.isArray(slideData.slides)) {
+      return res.status(500).json({
+        success: false,
+        message: 'AI дұрыс емес форматта жауап берді. Қайтадан көріңіз.'
+      });
+    }
 
     // 2. PPTX файл жасау
     const pptx = new PptxGenJS();
