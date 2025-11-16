@@ -6,13 +6,18 @@ const PptxGenJS = require('pptxgenjs');
 const fs = require('fs');
 const path = require('path');
 
-// Gemini API кілті (әкімші .env файлына қосады)
+// API кілттері
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
 
-// Public презентациялар папкасын жасау
+// Public папкаларын жасау
 const presentationsDir = path.join(__dirname, '../public/presentations');
+const imagesDir = path.join(__dirname, '../public/images');
 if (!fs.existsSync(presentationsDir)) {
   fs.mkdirSync(presentationsDir, { recursive: true });
+}
+if (!fs.existsSync(imagesDir)) {
+  fs.mkdirSync(imagesDir, { recursive: true });
 }
 
 // Gemini API helper function
@@ -339,6 +344,72 @@ ${details ? `Қосымша ақпарат: ${details}` : ''}
     res.status(500).json({
       success: false,
       message: error.message || 'Презентация генерация қатесі'
+    });
+  }
+});
+
+// @route   POST /api/ai/generate-image
+// @desc    Сурет генерациялау (Hugging Face Stable Diffusion)
+// @access  Private
+router.post('/generate-image', protect, async (req, res) => {
+  try {
+    const { prompt } = req.body;
+
+    if (!prompt) {
+      return res.status(400).json({
+        success: false,
+        message: 'Сурет сипаттамасы қажет'
+      });
+    }
+
+    if (!HUGGINGFACE_API_KEY) {
+      return res.status(400).json({
+        success: false,
+        message: 'HUGGINGFACE_API_KEY .env файлында жоқ. Әкімші қосуы керек.'
+      });
+    }
+
+    // Hugging Face Inference API - Stable Diffusion
+    const response = await axios.post(
+      'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1',
+      { inputs: prompt },
+      {
+        headers: {
+          'Authorization': `Bearer ${HUGGINGFACE_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        responseType: 'arraybuffer'
+      }
+    );
+
+    // Суретті файлға сақтау
+    const timestamp = Date.now();
+    const imageFilename = `image_${timestamp}.png`;
+    const imagePath = path.join(imagesDir, imageFilename);
+
+    fs.writeFileSync(imagePath, response.data);
+
+    res.json({
+      success: true,
+      imageUrl: `/images/${imageFilename}`,
+      message: 'Сурет сәтті жасалды!'
+    });
+
+  } catch (error) {
+    console.error('Сурет генерация қатесі:', error.response?.data || error.message);
+
+    // Hugging Face model loading болуы мүмкін
+    if (error.response?.status === 503) {
+      return res.status(503).json({
+        success: false,
+        message: 'Модель жүктелуде. 20 секундтан кейін қайталап көріңіз.',
+        isLoading: true
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Сурет генерация қатесі'
     });
   }
 });

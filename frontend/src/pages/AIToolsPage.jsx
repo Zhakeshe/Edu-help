@@ -15,7 +15,8 @@ import {
   Plus,
   MessageSquare,
   Edit3,
-  X
+  X,
+  Image as ImageIcon
 } from 'lucide-react';
 
 const AIToolsPage = () => {
@@ -190,6 +191,77 @@ const AIToolsPage = () => {
     } catch (error) {
       console.error('Chat қатесі:', error);
       setError(error.response?.data?.message || 'Қате орын алды. Backend іске қосылғанына көз жеткізіңіз.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generateImage = async () => {
+    if (!inputMessage.trim()) return;
+
+    const userMessage = {
+      id: Date.now(),
+      role: 'user',
+      content: inputMessage,
+      type: 'image_request',
+      timestamp: new Date().toISOString()
+    };
+
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+    setInputMessage('');
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await axios.post('/api/ai/generate-image', {
+        prompt: inputMessage
+      });
+
+      const aiMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: res.data.message || 'Сурет дайын!',
+        imageUrl: res.data.imageUrl,
+        type: 'image',
+        timestamp: new Date().toISOString()
+      };
+
+      const updatedMessages = [...newMessages, aiMessage];
+      setMessages(updatedMessages);
+
+      // Update conversation
+      if (currentConversationId) {
+        setConversations(prev => prev.map(c => {
+          if (c.id === currentConversationId) {
+            const title = c.messages.length === 0
+              ? '🎨 ' + inputMessage.slice(0, 27) + (inputMessage.length > 27 ? '...' : '')
+              : c.title;
+
+            return { ...c, messages: updatedMessages, title };
+          }
+          return c;
+        }));
+      } else {
+        // Create new conversation
+        const newConv = {
+          id: Date.now().toString(),
+          title: '🎨 ' + inputMessage.slice(0, 27) + (inputMessage.length > 27 ? '...' : ''),
+          messages: updatedMessages,
+          createdAt: new Date().toISOString()
+        };
+        setConversations(prev => [newConv, ...prev]);
+        setCurrentConversationId(newConv.id);
+      }
+
+    } catch (error) {
+      console.error('Сурет генерация қатесі:', error);
+
+      if (error.response?.data?.isLoading) {
+        setError('Модель жүктелуде. 20 секундтан кейін қайталап көріңіз.');
+      } else {
+        setError(error.response?.data?.message || 'Сурет генерация қатесі. HUGGINGFACE_API_KEY қосылғанына көз жеткізіңіз.');
+      }
     } finally {
       setLoading(false);
     }
@@ -428,7 +500,31 @@ const AIToolsPage = () => {
                             Edu-help Боты
                           </p>
                         )}
+                        {msg.type === 'image_request' && (
+                          <div className="flex items-center space-x-2 mb-2">
+                            <ImageIcon className="h-4 w-4" />
+                            <span className="text-sm font-medium">Сурет сұрауы:</span>
+                          </div>
+                        )}
                         <p className="whitespace-pre-wrap">{msg.content}</p>
+                        {msg.imageUrl && (
+                          <div className="mt-3">
+                            <img
+                              src={`http://localhost:5000${msg.imageUrl}`}
+                              alt="Generated"
+                              className="rounded-lg max-w-full h-auto border-2 border-gray-200"
+                              style={{ maxHeight: '400px' }}
+                            />
+                            <a
+                              href={`http://localhost:5000${msg.imageUrl}`}
+                              download
+                              className="inline-flex items-center space-x-2 mt-2 text-sm text-primary-600 hover:text-primary-700"
+                            >
+                              <Download className="h-4 w-4" />
+                              <span>Жүктеу</span>
+                            </a>
+                          </div>
+                        )}
                         <p className={`text-xs mt-2 ${
                           msg.role === 'user' ? 'text-primary-100' : 'text-gray-400'
                         }`}>
@@ -483,6 +579,16 @@ const AIToolsPage = () => {
                 className="input-field flex-1"
                 disabled={loading}
               />
+              <button
+                type="button"
+                onClick={generateImage}
+                disabled={loading || !inputMessage.trim()}
+                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Сурет жасау"
+              >
+                <ImageIcon className="h-5 w-5" />
+                <span className="hidden sm:inline">Сурет</span>
+              </button>
               <button
                 type="submit"
                 disabled={loading || !inputMessage.trim()}
