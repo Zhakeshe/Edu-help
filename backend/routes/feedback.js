@@ -124,7 +124,7 @@ router.put('/:id/respond', protect, async (req, res) => {
 
     feedback.adminResponse = adminResponse;
     feedback.status = 'жауап берілді';
-    feedback.respondedBy = req.admin._id;
+    feedback.respondedBy = req.user._id;
     feedback.respondedAt = Date.now();
 
     await feedback.save();
