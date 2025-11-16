@@ -378,9 +378,38 @@ router.post('/generate-image', protect, async (req, res) => {
           'Authorization': `Bearer ${HUGGINGFACE_API_KEY}`,
           'Content-Type': 'application/json'
         },
-        responseType: 'arraybuffer'
+        responseType: 'arraybuffer',
+        validateStatus: (status) => status < 600 // Accept all responses to handle errors
       }
     );
+
+    // Қате тексеру
+    if (response.status !== 200) {
+      // Buffer-ді JSON-ға айналдыру
+      const errorText = Buffer.from(response.data).toString('utf-8');
+      let errorMessage = 'Сурет генерация қатесі';
+
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.error || errorMessage;
+      } catch (e) {
+        errorMessage = errorText;
+      }
+
+      // Model loading қатесі
+      if (response.status === 503) {
+        return res.status(503).json({
+          success: false,
+          message: 'Модель жүктелуде. 20-30 секундтан кейін қайталап көріңіз.',
+          isLoading: true
+        });
+      }
+
+      return res.status(response.status).json({
+        success: false,
+        message: errorMessage
+      });
+    }
 
     // Суретті файлға сақтау
     const timestamp = Date.now();
@@ -396,20 +425,11 @@ router.post('/generate-image', protect, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Сурет генерация қатесі:', error.response?.data || error.message);
-
-    // Hugging Face model loading болуы мүмкін
-    if (error.response?.status === 503) {
-      return res.status(503).json({
-        success: false,
-        message: 'Модель жүктелуде. 20 секундтан кейін қайталап көріңіз.',
-        isLoading: true
-      });
-    }
+    console.error('Сурет генерация қатесі:', error.message);
 
     res.status(500).json({
       success: false,
-      message: error.message || 'Сурет генерация қатесі'
+      message: 'Сурет генерация қатесі: ' + (error.message || 'Белгісіз қате')
     });
   }
 });
