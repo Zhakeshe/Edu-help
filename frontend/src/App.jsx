@@ -2,11 +2,15 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import ChatButton from './components/ChatButton';
+import ProtectedRoute from './components/ProtectedRoute';
+
+// Pages
 import Home from './pages/Home';
+import Auth from './pages/Auth';
+import Profile from './pages/Profile';
 import ClassPage from './pages/ClassPage';
 import AIToolsPage from './pages/AIToolsPage';
 import AdminPanel from './pages/AdminPanel';
-import Login from './components/Admin/Login';
 
 function App() {
   return (
@@ -15,12 +19,47 @@ function App() {
         <div className="min-h-screen">
           <Navbar />
           <Routes>
+            {/* Public routes */}
             <Route path="/" element={<Home />} />
-            <Route path="/class/:classNumber" element={<ClassPage />} />
-            <Route path="/ai-tools" element={<AIToolsPage />} />
-            <Route path="/admin/login" element={<Login />} />
-            <Route path="/admin" element={<AdminPanel />} />
+            <Route path="/auth" element={<Auth />} />
+
+            {/* Protected routes - кіргеннен кейін ғана */}
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/class/:classNumber"
+              element={
+                <ProtectedRoute>
+                  <ClassPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/ai-tools"
+              element={
+                <ProtectedRoute>
+                  <AIToolsPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Admin routes - тек админдерге */}
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute adminOnly>
+                  <AdminPanel />
+                </ProtectedRoute>
+              }
+            />
           </Routes>
+
           <ChatButton />
 
           {/* Footer */}

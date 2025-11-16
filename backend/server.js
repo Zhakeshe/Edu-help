@@ -27,9 +27,11 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/users', require('./routes/users'));
 app.use('/api/materials', require('./routes/materials'));
 app.use('/api/classes', require('./routes/classes'));
 app.use('/api/ai-tools', require('./routes/aitools'));
+app.use('/api/ai', require('./routes/ai'));
 app.use('/api/feedback', require('./routes/feedback'));
 
 // Негізгі роут
