@@ -387,9 +387,9 @@ router.post('/generate-image', protect, async (req, res) => {
       });
     }
 
-    // Hugging Face Inference API - Stable Diffusion
+    // Hugging Face Inference API - Stable Diffusion v1.5 (тұрақты және тегін)
     const response = await axios.post(
-      'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1',
+      'https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5',
       { inputs: prompt },
       {
         headers: {
@@ -422,6 +422,24 @@ router.post('/generate-image', protect, async (req, res) => {
           isLoading: true
         });
       }
+
+      // Model deprecated/removed қатесі
+      if (response.status === 410) {
+        return res.status(410).json({
+          success: false,
+          message: 'Модель қолжетімді емес. Әкімшіге хабарласыңыз.'
+        });
+      }
+
+      // API key қатесі
+      if (response.status === 401 || response.status === 403) {
+        return res.status(401).json({
+          success: false,
+          message: 'API кілті қате немесе жарамсыз. Әкімші .env файлын тексеруі керек.'
+        });
+      }
+
+      console.error(`Hugging Face API қатесі [${response.status}]:`, errorMessage);
 
       return res.status(response.status).json({
         success: false,
