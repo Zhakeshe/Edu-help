@@ -150,8 +150,18 @@ const MaterialsView = () => {
                       </button>
                     </div>
 
-                    <div className="mt-2 text-xs text-gray-400">
-                      {material.fileName}
+                    <div className="mt-2 flex items-center justify-between text-xs">
+                      <span className="text-gray-500">
+                        {material.fileType?.toUpperCase() === 'PDF' && '📄 PDF құжат'}
+                        {['DOC', 'DOCX'].includes(material.fileType?.toUpperCase()) && '📝 Word құжат'}
+                        {['PPT', 'PPTX'].includes(material.fileType?.toUpperCase()) && '📊 Презентация'}
+                        {!['PDF', 'DOC', 'DOCX', 'PPT', 'PPTX'].includes(material.fileType?.toUpperCase()) && `📎 ${material.fileType?.toUpperCase()}`}
+                      </span>
+                      {material.fileSize && (
+                        <span className="text-gray-400">
+                          {(material.fileSize / 1024 / 1024).toFixed(2)} МБ
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
