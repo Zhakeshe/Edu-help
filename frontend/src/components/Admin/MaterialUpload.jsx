@@ -199,8 +199,12 @@ const MaterialUpload = () => {
                 required
                 className="input-field"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Қабылданатын форматтар: PDF, DOC, DOCX, PPT, PPTX
+              </p>
               {file && (
-                <p className="text-sm text-gray-600 mt-1">
+                <p className="text-sm text-green-600 mt-1 flex items-center">
+                  <Check className="h-4 w-4 mr-1" />
                   Таңдалды: {file.name}
                 </p>
               )}
