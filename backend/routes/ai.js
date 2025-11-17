@@ -198,13 +198,31 @@ ${details ? `Қосымша ақпарат: ${details}` : ''}
 
     // JSON parse (Gemini кейде ```json ``` қосып жібереді, оны алып тастаймыз)
     let jsonText = aiResponse.trim();
-    if (jsonText.startsWith('```json')) {
-      jsonText = jsonText.replace(/```json\n/, '').replace(/\n```$/, '');
-    } else if (jsonText.startsWith('```')) {
-      jsonText = jsonText.replace(/```\n/, '').replace(/\n```$/, '');
+
+    // Remove markdown code blocks
+    jsonText = jsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+
+    let slideData;
+    try {
+      slideData = JSON.parse(jsonText);
+    } catch (parseError) {
+      console.error('JSON parse қатесі:', parseError);
+      console.error('AI жауабы:', aiResponse);
+
+      // Егер JSON parse болмаса, мәтін форматында қайтарамыз
+      return res.status(500).json({
+        success: false,
+        message: 'AI жауабын parse ету қатесі. Қайтадан көріңіз.',
+        debug: aiResponse.substring(0, 500)
+      });
     }
 
-    const slideData = JSON.parse(jsonText);
+    if (!slideData.slides || !Array.isArray(slideData.slides)) {
+      return res.status(500).json({
+        success: false,
+        message: 'AI дұрыс емес форматта жауап берді. Қайтадан көріңіз.'
+      });
+    }
 
     // 2. PPTX файл жасау
     const pptx = new PptxGenJS();
@@ -369,18 +387,65 @@ router.post('/generate-image', protect, async (req, res) => {
       });
     }
 
-    // Hugging Face Inference API - Stable Diffusion
+    // Hugging Face Inference API - Stable Diffusion v1.5 (тұрақты және тегін)
     const response = await axios.post(
-      'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1',
+      'https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5',
       { inputs: prompt },
       {
         headers: {
           'Authorization': `Bearer ${HUGGINGFACE_API_KEY}`,
           'Content-Type': 'application/json'
         },
-        responseType: 'arraybuffer'
+        responseType: 'arraybuffer',
+        validateStatus: (status) => status < 600 // Accept all responses to handle errors
       }
     );
+
+    // Қате тексеру
+    if (response.status !== 200) {
+      // Buffer-ді JSON-ға айналдыру
+      const errorText = Buffer.from(response.data).toString('utf-8');
+      let errorMessage = 'Сурет генерация қатесі';
+
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorMessage = errorJson.error || errorMessage;
+      } catch (e) {
+        errorMessage = errorText;
+      }
+
+      // Model loading қатесі
+      if (response.status === 503) {
+        return res.status(503).json({
+          success: false,
+          message: 'Модель жүктелуде. 20-30 секундтан кейін қайталап көріңіз.',
+          isLoading: true
+        });
+      }
+
+      // Model deprecated/removed қатесі
+      if (response.status === 410) {
+        return res.status(410).json({
+          success: false,
+          message: 'Модель қолжетімді емес. Әкімшіге хабарласыңыз.'
+        });
+      }
+
+      // API key қатесі
+      if (response.status === 401 || response.status === 403) {
+        return res.status(401).json({
+          success: false,
+          message: 'API кілті қате немесе жарамсыз. Әкімші .env файлын тексеруі керек.'
+        });
+      }
+
+      console.error(`Hugging Face API қатесі [${response.status}]:`, errorMessage);
+
+      return res.status(response.status).json({
+        success: false,
+        message: errorMessage
+      });
+    }
 
     // Суретті файлға сақтау
     const timestamp = Date.now();
@@ -396,20 +461,11 @@ router.post('/generate-image', protect, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Сурет генерация қатесі:', error.response?.data || error.message);
-
-    // Hugging Face model loading болуы мүмкін
-    if (error.response?.status === 503) {
-      return res.status(503).json({
-        success: false,
-        message: 'Модель жүктелуде. 20 секундтан кейін қайталап көріңіз.',
-        isLoading: true
-      });
-    }
+    console.error('Сурет генерация қатесі:', error.message);
 
     res.status(500).json({
       success: false,
-      message: error.message || 'Сурет генерация қатесі'
+      message: 'Сурет генерация қатесі: ' + (error.message || 'Белгісіз қате')
     });
   }
 });
