@@ -85,7 +85,14 @@ const Auth = () => {
       if (res.data.success) {
         // Token арқылы кіру
         loginWithToken(res.data.data.token, res.data.data);
-        navigate(from, { replace: true });
+
+        // Роліне қарап бағыттау
+        const userRole = res.data.data.role;
+        if (userRole === 'admin') {
+          navigate('/admin', { replace: true });
+        } else {
+          navigate(from, { replace: true });
+        }
       }
     } catch (err) {
       const errorData = err.response?.data;
