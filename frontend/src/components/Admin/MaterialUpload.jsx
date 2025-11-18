@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Upload, FileText, Trash2, Check } from 'lucide-react';
+import { Upload, FileText, Trash2, Check, X } from 'lucide-react';
 
 const MaterialUpload = () => {
   const [formData, setFormData] = useState({
@@ -11,7 +11,7 @@ const MaterialUpload = () => {
     category: 'ҚМЖ',
     subject: ''
   });
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({ type: '', message: '' });
   const [materials, setMaterials] = useState([]);
@@ -32,8 +32,8 @@ const MaterialUpload = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!file) {
-      setStatus({ type: 'error', message: 'Файл таңдаңыз' });
+    if (!files || files.length === 0) {
+      setStatus({ type: 'error', message: 'Кем дегенде бір файл таңдаңыз' });
       return;
     }
 
@@ -41,17 +41,25 @@ const MaterialUpload = () => {
     setStatus({ type: '', message: '' });
 
     const data = new FormData();
-    data.append('file', file);
+
+    // Барлық файлдарды қосу
+    files.forEach(file => {
+      data.append('files', file);
+    });
+
     Object.keys(formData).forEach(key => {
       data.append(key, formData[key]);
     });
 
     try {
-      await axios.post('/api/materials/upload', data, {
+      const res = await axios.post('/api/materials/upload', data, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
 
-      setStatus({ type: 'success', message: 'Материал жүктелді!' });
+      setStatus({
+        type: 'success',
+        message: `${res.data.filesCount} файл жүктелді!`
+      });
       setFormData({
         title: '',
         description: '',
@@ -60,7 +68,7 @@ const MaterialUpload = () => {
         category: 'ҚМЖ',
         subject: ''
       });
-      setFile(null);
+      setFiles([]);
       fetchMaterials();
     } catch (error) {
       setStatus({
@@ -89,6 +97,23 @@ const MaterialUpload = () => {
       ...formData,
       [e.target.name]: e.target.value
     });
+  };
+
+  const handleFileChange = (e) => {
+    const selectedFiles = Array.from(e.target.files);
+    setFiles(selectedFiles);
+  };
+
+  const removeFile = (index) => {
+    setFiles(files.filter((_, i) => i !== index));
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
   };
 
   return (
@@ -190,30 +215,77 @@ const MaterialUpload = () => {
             </div>
 
             {/* File Upload */}
-            <div>
+            <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Файл *
+                Файл(дар) * (бірнеше файл таңдай аласыз)
               </label>
               <input
                 type="file"
-                onChange={(e) => setFile(e.target.files[0])}
-                required
+                onChange={handleFileChange}
+                required={files.length === 0}
+                multiple
                 className="input-field"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Кез келген файл жүктеуге болады (PDF, DOCX, PPTX, TXT, PNG, JPG, ZIP, т.б.)
+                Кез келген файл жүктеуге болады (PDF, DOCX, PPTX, TXT, PNG, JPG, MP3, MP4, ZIP, т.б.)
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                📦 Бірнеше файл бірден таңдап жүктей аласыз (макс. 20 файл, әр файл макс. 100MB)
               </p>
               <p className="text-xs text-red-500 mt-1">
                 ⚠️ Қауіпті файлдар (.exe, .bat, .sh) рұқсат етілмейді
               </p>
-              {file && (
-                <p className="text-sm text-green-600 mt-1 flex items-center">
-                  <Check className="h-4 w-4 mr-1" />
-                  Таңдалды: {file.name}
-                </p>
-              )}
             </div>
           </div>
+
+          {/* Selected Files List */}
+          {files.length > 0 && (
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-gray-700">
+                  Таңдалған файлдар ({files.length})
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setFiles([])}
+                  className="text-xs text-red-600 hover:text-red-800"
+                >
+                  Барлығын өшіру
+                </button>
+              </div>
+              <div className="space-y-2">
+                {files.map((file, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between bg-white p-3 rounded border border-gray-200"
+                  >
+                    <div className="flex items-center space-x-3 flex-1">
+                      <div className="flex-shrink-0 w-8 h-8 bg-primary-100 rounded flex items-center justify-center">
+                        <span className="text-xs font-bold text-primary-600">
+                          {index + 1}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {file.name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {formatFileSize(file.size)}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(index)}
+                      className="flex-shrink-0 ml-3 text-red-600 hover:text-red-800"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Description */}
           <div>
@@ -274,6 +346,7 @@ const MaterialUpload = () => {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Тақырып</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Файлдар</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Сынып</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Тоқсан</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Категория</th>
@@ -284,6 +357,11 @@ const MaterialUpload = () => {
               {materials.slice(0, 10).map((material) => (
                 <tr key={material._id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm">{material.title}</td>
+                  <td className="px-4 py-3 text-sm">
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+                      {material.files?.length || 1} файл
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-sm">{material.classNumber}</td>
                   <td className="px-4 py-3 text-sm">{material.quarter}</td>
                   <td className="px-4 py-3 text-sm">{material.category}</td>

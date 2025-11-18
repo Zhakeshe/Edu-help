@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import { Download, FileText, ArrowLeft, Calendar } from 'lucide-react';
+import { Download, FileText, ArrowLeft, Calendar, Filter } from 'lucide-react';
 
 const MaterialsView = () => {
   const { classNumber } = useParams();
   const [classData, setClassData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedQuarter, setSelectedQuarter] = useState(1);
+  const [fileTypeFilter, setFileTypeFilter] = useState('all');
 
   useEffect(() => {
     fetchClassData();
@@ -42,6 +43,42 @@ const MaterialsView = () => {
       console.error('Жүктеу қатесі:', error);
       alert('Файлды жүктеу мүмкін болмады');
     }
+  };
+
+  const getFileTypeCategory = (fileType) => {
+    if (!fileType) return 'other';
+    const type = fileType.toUpperCase();
+    if (['PDF', 'DOC', 'DOCX', 'TXT', 'MD'].includes(type)) return 'text';
+    if (['PPT', 'PPTX'].includes(type)) return 'presentation';
+    if (['PNG', 'JPG', 'JPEG', 'GIF', 'SVG', 'WEBP'].includes(type)) return 'image';
+    if (['MP3', 'WAV', 'OGG', 'M4A'].includes(type)) return 'audio';
+    if (['MP4', 'AVI', 'MOV', 'MKV', 'WEBM'].includes(type)) return 'video';
+    if (['ZIP', 'RAR', '7Z', 'TAR', 'GZ'].includes(type)) return 'archive';
+    if (['XLS', 'XLSX', 'CSV'].includes(type)) return 'spreadsheet';
+    return 'other';
+  };
+
+  const getFileIcon = (fileType) => {
+    if (!fileType) return '📎';
+    const type = fileType.toUpperCase();
+    if (type === 'PDF') return '📄';
+    if (['DOC', 'DOCX'].includes(type)) return '📝';
+    if (['PPT', 'PPTX'].includes(type)) return '📊';
+    if (['PNG', 'JPG', 'JPEG', 'GIF', 'SVG', 'WEBP'].includes(type)) return '🖼️';
+    if (['TXT', 'MD'].includes(type)) return '📝';
+    if (['ZIP', 'RAR', '7Z'].includes(type)) return '📦';
+    if (['MP4', 'AVI', 'MOV', 'MKV'].includes(type)) return '🎥';
+    if (['MP3', 'WAV', 'OGG'].includes(type)) return '🎵';
+    if (['XLS', 'XLSX', 'CSV'].includes(type)) return '📊';
+    return `📎`;
+  };
+
+  const filterMaterials = (materials) => {
+    if (fileTypeFilter === 'all') return materials;
+    return materials.filter(material => {
+      const materialFileType = material.fileType || material.files?.[0]?.fileType;
+      return getFileTypeCategory(materialFileType) === fileTypeFilter;
+    });
   };
 
   if (loading) {
@@ -103,25 +140,62 @@ const MaterialsView = () => {
         ))}
       </div>
 
+      {/* File Type Filter */}
+      <div className="glass-card p-4 mb-8">
+        <div className="flex items-center space-x-2 mb-3">
+          <Filter className="h-5 w-5 text-gray-600" />
+          <h3 className="font-semibold text-gray-700">Файл түрі бойынша фильтрлеу:</h3>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { value: 'all', label: 'Барлығы', icon: '📁' },
+            { value: 'text', label: 'Мәтін', icon: '📝' },
+            { value: 'presentation', label: 'Презентация', icon: '📊' },
+            { value: 'image', label: 'Сурет', icon: '🖼️' },
+            { value: 'audio', label: 'Аудио', icon: '🎵' },
+            { value: 'video', label: 'Видео', icon: '🎥' },
+            { value: 'archive', label: 'Архив', icon: '📦' },
+            { value: 'spreadsheet', label: 'Кесте', icon: '📊' },
+            { value: 'other', label: 'Басқа', icon: '📎' }
+          ].map((filter) => (
+            <button
+              key={filter.value}
+              onClick={() => setFileTypeFilter(filter.value)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                fileTypeFilter === filter.value
+                  ? 'bg-primary-500 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              {filter.icon} {filter.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Materials by Category */}
       <div className="space-y-8">
-        {Object.entries(currentQuarter.materials).map(([category, materials]) => (
-          <div key={category} className="glass-card p-6">
-            <h2 className="text-2xl font-bold mb-6 flex items-center space-x-2">
-              <FileText className="h-6 w-6 text-primary-600" />
-              <span>{category}</span>
-              <span className="text-sm font-normal text-gray-500">
-                ({materials.length})
-              </span>
-            </h2>
+        {Object.entries(currentQuarter.materials).map(([category, materials]) => {
+          const filteredMaterials = filterMaterials(materials);
+          return (
+            <div key={category} className="glass-card p-6">
+              <h2 className="text-2xl font-bold mb-6 flex items-center space-x-2">
+                <FileText className="h-6 w-6 text-primary-600" />
+                <span>{category}</span>
+                <span className="text-sm font-normal text-gray-500">
+                  ({filteredMaterials.length} / {materials.length})
+                </span>
+              </h2>
 
-            {materials.length === 0 ? (
-              <div className="text-center py-8 bg-gray-50 rounded-lg">
-                <p className="text-gray-500">Әзірге материалдар жоқ</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {materials.map((material) => (
+              {filteredMaterials.length === 0 ? (
+                <div className="text-center py-8 bg-gray-50 rounded-lg">
+                  <p className="text-gray-500">
+                    {materials.length === 0 ? 'Әзірге материалдар жоқ' : 'Таңдалған фильтрге сай материал жоқ'}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredMaterials.map((material) => (
                   <div
                     key={material._id}
                     className="border-2 border-gray-200 rounded-lg p-4 hover:border-primary-500 hover:shadow-lg transition-all"
@@ -151,23 +225,37 @@ const MaterialsView = () => {
                       </button>
                     </div>
 
-                    <div className="mt-2 flex items-center justify-between text-xs">
-                      <span className="text-gray-500">
-                        {material.fileType?.toUpperCase() === 'PDF' && '📄 PDF құжат'}
-                        {['DOC', 'DOCX'].includes(material.fileType?.toUpperCase()) && '📝 Word құжат'}
-                        {['PPT', 'PPTX'].includes(material.fileType?.toUpperCase()) && '📊 Презентация'}
-                        {['PNG', 'JPG', 'JPEG', 'GIF', 'SVG', 'WEBP'].includes(material.fileType?.toUpperCase()) && '🖼️ Сурет'}
-                        {['TXT', 'MD'].includes(material.fileType?.toUpperCase()) && '📝 Мәтін'}
-                        {['ZIP', 'RAR', '7Z'].includes(material.fileType?.toUpperCase()) && '📦 Архив'}
-                        {['MP4', 'AVI', 'MOV', 'MKV'].includes(material.fileType?.toUpperCase()) && '🎥 Видео'}
-                        {['MP3', 'WAV', 'OGG'].includes(material.fileType?.toUpperCase()) && '🎵 Аудио'}
-                        {['XLS', 'XLSX', 'CSV'].includes(material.fileType?.toUpperCase()) && '📊 Excel'}
-                        {!['PDF', 'DOC', 'DOCX', 'PPT', 'PPTX', 'PNG', 'JPG', 'JPEG', 'GIF', 'SVG', 'WEBP', 'TXT', 'MD', 'ZIP', 'RAR', '7Z', 'MP4', 'AVI', 'MOV', 'MKV', 'MP3', 'WAV', 'OGG', 'XLS', 'XLSX', 'CSV'].includes(material.fileType?.toUpperCase()) && `📎 ${material.fileType?.toUpperCase()}`}
-                      </span>
-                      {material.fileSize && (
-                        <span className="text-gray-400">
-                          {(material.fileSize / 1024 / 1024).toFixed(2)} МБ
-                        </span>
+                    {/* Files List */}
+                    <div className="mt-2 space-y-1">
+                      {material.files && material.files.length > 0 ? (
+                        // Бірнеше файл
+                        material.files.map((file, index) => (
+                          <div key={index} className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-semibold text-primary-600">#{index + 1}</span>
+                              <span className="text-gray-600">
+                                {getFileIcon(file.fileType)} {file.fileType?.toUpperCase() || 'FILE'}
+                              </span>
+                            </div>
+                            {file.fileSize && (
+                              <span className="text-gray-400">
+                                {(file.fileSize / 1024 / 1024).toFixed(2)} МБ
+                              </span>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        // Бір файл (ескі формат)
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-500">
+                            {getFileIcon(material.fileType)} {material.fileType?.toUpperCase() || 'FILE'}
+                          </span>
+                          {material.fileSize && (
+                            <span className="text-gray-400">
+                              {(material.fileSize / 1024 / 1024).toFixed(2)} МБ
+                            </span>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -175,7 +263,8 @@ const MaterialsView = () => {
               </div>
             )}
           </div>
-        ))}
+        );
+        })}
       </div>
     </div>
   );
