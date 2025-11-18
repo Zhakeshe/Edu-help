@@ -53,7 +53,7 @@ Railway-де Variables бөліміне өтіп, мыналарды қосың�
 
 ```env
 MONGODB_URI=mongodb://mongo:xxxxx@railway.app:6379
-JWT_SECRET=eduhelp_super_secret_key_2024_minimum_32_characters_long
+JWT_SECRET=eduhelp_super_secret_key_2025_minimum_32_characters_long
 PORT=5000
 NODE_ENV=production
 FRONTEND_URL=https://eduhelp.vercel.app

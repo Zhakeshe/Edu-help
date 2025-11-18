@@ -18,7 +18,7 @@
 3. Variables → Төмендегіні қосыңыз:
 
 MONGODB_URI=<Railway-дан көшірген>
-JWT_SECRET=eduhelp_super_secret_key_2024_minimum_32_characters
+JWT_SECRET=eduhelp_super_secret_key_2025_minimum_32_characters
 PORT=5000
 NODE_ENV=production
 FRONTEND_URL=https://eduhelp.vercel.app
