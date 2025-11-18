@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Mail, Phone, Shield, User, Check, ArrowLeft, MessageCircle } from 'lucide-react';
+import { Mail, User, Check, ArrowLeft } from 'lucide-react';
 import axios from 'axios';
 
 const Auth = () => {
   // State
   const [step, setStep] = useState('input'); // 'input' | 'verify'
-  const [identifier, setIdentifier] = useState(''); // email немесе phone
+  const [identifier, setIdentifier] = useState(''); // email
   const [fullName, setFullName] = useState('');
   const [code, setCode] = useState(['', '', '', '', '', '']); // 6 санды код
-  const [identifierType, setIdentifierType] = useState('email'); // 'email' | 'phone'
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [timer, setTimer] = useState(0); // Countdown timer
@@ -33,51 +32,6 @@ const Auth = () => {
     }
   }, [timer]);
 
-  // Identifier типін автоматты анықтау
-  useEffect(() => {
-    const isEmail = /^\S+@\S+\.\S+$/.test(identifier);
-    const isPhone = /^[\d\+\-\(\)\s]+$/.test(identifier) && !identifier.startsWith('@');
-    const isTelegram = identifier.startsWith('@') || (/^\d{9,}$/.test(identifier.replace(/\D/g, '')) && !identifier.startsWith('+'));
-
-    if (isEmail) {
-      setIdentifierType('email');
-    } else if (isTelegram) {
-      setIdentifierType('telegram');
-    } else if (isPhone) {
-      setIdentifierType('phone');
-    }
-  }, [identifier]);
-
-  // Телефон нөмірін форматтау (Қазақстан үшін)
-  const formatPhoneNumber = (value) => {
-    // Тек сандар мен + қалдыру
-    const cleaned = value.replace(/[^\d+]/g, '');
-
-    // Егер +7 болмаса және сан енгізсе, +7 қосу
-    if (cleaned.length > 0 && !cleaned.startsWith('+')) {
-      return '+7' + cleaned;
-    }
-
-    return cleaned;
-  };
-
-  // Identifier өзгерту (телефон форматымен)
-  const handleIdentifierChange = (e) => {
-    let value = e.target.value;
-
-    // Telegram username болса (@-пен бастался), форматтамаймыз
-    if (value.startsWith('@')) {
-      setIdentifier(value);
-      return;
-    }
-
-    // Егер телефон нөмірі сияқты болса (сандар, +, (, ), -, space)
-    if (/^[\d\+\-\(\)\s]*$/.test(value) && !value.startsWith('@')) {
-      value = formatPhoneNumber(value);
-    }
-
-    setIdentifier(value);
-  };
 
   // Код жіберу
   const handleSendCode = async (e) => {
@@ -211,8 +165,8 @@ const Auth = () => {
           </h2>
           <p className="text-gray-600">
             {step === 'input'
-              ? 'Email, телефон немесе Telegram енгізіңіз'
-              : `Код жіберілді: ${identifierType === 'email' ? 'Email' : identifierType === 'telegram' ? 'Telegram' : 'Телефон'}`
+              ? 'Email енгізіңіз'
+              : 'Код email-ге жіберілді'
             }
           </p>
         </div>
@@ -224,30 +178,24 @@ const Auth = () => {
             <form onSubmit={handleSendCode} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email, Телефон немесе Telegram
+                  Email
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    {identifierType === 'email' ? (
-                      <Mail className="h-5 w-5 text-gray-400" />
-                    ) : identifierType === 'telegram' ? (
-                      <MessageCircle className="h-5 w-5 text-gray-400" />
-                    ) : (
-                      <Phone className="h-5 w-5 text-gray-400" />
-                    )}
+                    <Mail className="h-5 w-5 text-gray-400" />
                   </div>
                   <input
-                    type="text"
+                    type="email"
                     value={identifier}
-                    onChange={handleIdentifierChange}
+                    onChange={(e) => setIdentifier(e.target.value)}
                     required
                     className="input-field pl-10"
-                    placeholder="email@example.com, +7 700 123 4567 немесе @username"
+                    placeholder="email@example.com"
                     autoFocus
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
-                  Сізге 6 санды код жіберіледі (Email, SMS немесе Telegram)
+                  Сізге 6 санды код жіберіледі
                 </p>
               </div>
 

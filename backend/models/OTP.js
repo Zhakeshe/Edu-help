@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const otpSchema = new mongoose.Schema({
   identifier: {
-    type: String, // email, телефон немесе telegram
+    type: String, // email
     required: true,
     lowercase: true,
     trim: true
@@ -13,7 +13,7 @@ const otpSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['email', 'phone', 'telegram'],
+    enum: ['email'],
     required: true
   },
   expiresAt: {
