@@ -8,20 +8,24 @@
     "dev": "nodemon server.js",
     "seed:ai": "node seedAITools.js"
   },
-  "keywords": ["education", "kazakhstan", "materials"],
+  "keywords": [
+    "education",
+    "kazakhstan",
+    "materials"
+  ],
   "author": "EduHelp Team",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "mongoose": "^8.0.3",
-    "jsonwebtoken": "^9.0.2",
+    "axios": "^1.6.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.0.3",
     "multer": "^1.4.5-lts.1",
-    "axios": "^1.6.2",
-    "pptxgenjs": "^3.12.0",
-    "nodemailer": "^6.9.7"
+    "nodemailer": "^6.10.1",
+    "pptxgenjs": "^3.12.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
