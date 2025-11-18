@@ -109,27 +109,122 @@ router.post('/generate-kmzh', protect, async (req, res) => {
     }
 
     const prompt = `
-Мына мәліметтерге сүйене отырып, толық ҚМЖ (Қысқа мерзімді жоспар) жаса:
+Сіз білім беру саласындағы кәсіби мұғалімсіз. Қазақстан Республикасының жаңартылған білім беру бағдарламасы бойынша толық ҚМЖ (Қысқа мерзімді жоспар) жасаңыз.
 
-Пән: ${subject}
-Сынып: ${classNumber}
-Тоқсан: ${quarter}
-Тақырып: ${theme}
-${objectives ? `Мақсаттар: ${objectives}` : ''}
+**Сабақ туралы мәліметтер:**
+- Пән: ${subject}
+- Сынып: ${classNumber}-сынып
+- Тоқсан: ${quarter}-тоқсан
+- Сабақтың тақырыбы: ${theme}
+${objectives ? `- Мақсаттар: ${objectives}` : ''}
 
-ҚМЖ мына бөлімдерді қамтуы керек:
-1. Сабақтың тақырыбы
-2. Оқу мақсаттары
-3. Сабақтың барысы (Ұйымдастыру, Жаңа материал, Бекіту, Қорытынды)
-4. Әдіс-тәсілдер
-5. Ресурстар
-6. Бағалау критерийлері
-7. Үй тапсырмасы
+**ҚМЖ құрылымы (толық мазмұнды):**
 
-Толық, қазақ тілінде, кәсіби нұсқа жаса.
+**1. Жалпы мәліметтер**
+   - Мектеп атауы: [Мектеп атауы]
+   - Күні: [Күні]
+   - Мұғалімнің аты-жөні: [Мұғалімнің аты-жөні]
+   - Сынып: ${classNumber}-сынып
+   - Қатысқандар саны: ___ Қатыспағандар: ___
+   - Сабақтың тақырыбы: ${theme}
+
+**2. Оқу мақсаттары (3-5 нақты мақсат)**
+   - Білімділік: [Оқушылар не білу керек]
+   - Дағдылық: [Оқушылар не істей алу керек]
+   - Құндылық: [Қандай құндылықтар қалыптасады]
+
+**3. Сабақтың барысы (40-45 минут)**
+
+   **Кіріспе бөлім (5-7 минут):**
+   - Ұйымдастыру кезеңі (1-2 мин)
+   - Үй тапсырмасын тексеру (2-3 мин)
+   - Психологиялық ахуал туғызу (1-2 мин)
+   - Сабақтың мақсатымен таныстыру (1 мин)
+
+   **Негізгі бөлім (25-30 минут):**
+
+   *Жаңа материалды меңгерту (10-12 мин):*
+   - Қысқаша түсіндірме
+   - Бейне/аудио материалдар
+   - Диаграммалар, кестелер
+   - Мысалдар мен тапсырмалар
+
+   *Практикалық жұмыс (10-12 мин):*
+   - Жеке жұмыс: [Тапсырма сипаттамасы]
+   - Жұптық жұмыс: [Тапсырма сипаттамасы]
+   - Топтық жұмыс: [Тапсырма сипаттамасы]
+
+   *Бекіту (5-6 мин):*
+   - Қайталау сұрақтары
+   - Ойын элементтері
+   - Кері байланыс
+
+   **Қорытынды бөлім (5-8 минут):**
+   - Сабақты қорыту (2-3 мин)
+   - Рефлексия (2-3 мин)
+   - Бағалау (1-2 мин)
+   - Үй тапсырмасын түсіндіру (1 мин)
+
+**4. Әдіс-тәсілдер мен стратегиялар**
+   - Деңгейлеп оқыту
+   - Сын тұрғысынан ойлау
+   - Диалогтық оқыту
+   - Топтық жұмыс
+   - АКТ қолдану
+   - Формативті бағалау
+
+**5. Ресурстар мен құрал-жабдықтар**
+   - Оқулық: [Атауы, беті]
+   - Көрнекіліктер: [Тізім]
+   - Техникалық құралдар: [Интерактивті тақта, проектор, т.б.]
+   - Қосымша материалдар: [Карточкалар, плакаттар, т.б.]
+   - Интернет ресурстары: [Сілтемелер]
+
+**6. Саралау (дифференциация)**
+   - Үлгерімі жоғары оқушыларға: [Қиын тапсырмалар]
+   - Үлгерімі орташа оқушыларға: [Стандартты тапсырмалар]
+   - Қолдау қажет оқушыларға: [Көмек, қосымша түсіндірме]
+
+**7. Бағалау критерийлері**
+
+   *Формативті бағалау:*
+   - Ауызша сұрақтар
+   - Өзін-өзі бағалау
+   - Өзара бағалау
+   - Кері байланыс
+
+   *Критерийлер:*
+   - "Өте жақсы" (5): [Сипаттама]
+   - "Жақсы" (4): [Сипаттама]
+   - "Қанағаттанарлық" (3): [Сипаттама]
+
+**8. Рефлексия**
+   - Стикерлер (бағдаршам әдісі)
+   - Бес саусақ әдісі
+   - "Білемін-Білдім-Білгім келеді" кестесі
+
+**9. Үй тапсырмасы**
+   - Негізгі тапсырма: [Толық сипаттама]
+   - Шығармашылық тапсырма (қосымша): [Сипаттама]
+   - Оқулық: § ___, бет ___, жаттығу ___
+
+**10. Қосымша ескертулер**
+   - Қауіпсіздік техникасы
+   - Денсаулық сақтау технологиялары
+   - Құндылықтарды дарыту
+
+---
+
+**МАҢЫЗДЫ ЕРЕЖЕЛЕР:**
+- Барлық мәтін қазақ тілінде болуы керек
+- Кәсіби, нақты және толық болуы керек
+- ${classNumber}-сынып деңгейіне сай
+- Заманауи оқыту әдістерін қолдану
+- Практикалық тапсырмалар нақты болуы керек
+- Уақыт бөлінісі дұрыс болуы керек
 `;
 
-    const content = await callGemini(prompt, 0.7, 3000);
+    const content = await callGemini(prompt, 0.7, 8000); // Толық ҚМЖ үшін көп token
 
     const filename = `${subject}_${classNumber}сынып_${quarter}тоқсан_${theme.replace(/\s+/g, '_')}.txt`;
 
@@ -233,88 +328,199 @@ ${details ? `Қосымша ақпарат: ${details}` : ''}
     pptx.subject = subject;
     pptx.title = theme;
 
-    // Theme colors
-    const primaryColor = '4F46E5';  // Indigo
-    const secondaryColor = '7C3AED'; // Purple
-    const textColor = '1F2937';     // Gray-800
+    // Әр слайдқа түрлі-түсті gradient colors
+    const colorSchemes = [
+      { primary: '3B82F6', secondary: '1D4ED8', accent: 'DBEAFE', text: '1E3A8A' }, // Blue
+      { primary: '8B5CF6', secondary: '6D28D9', accent: 'EDE9FE', text: '5B21B6' }, // Purple
+      { primary: 'EC4899', secondary: 'BE185D', accent: 'FCE7F3', text: '9F1239' }, // Pink
+      { primary: '10B981', secondary: '047857', accent: 'D1FAE5', text: '065F46' }, // Green
+      { primary: 'F59E0B', secondary: 'D97706', accent: 'FEF3C7', text: '92400E' }, // Amber
+      { primary: 'EF4444', secondary: 'B91C1C', accent: 'FEE2E2', text: '7F1D1D' }, // Red
+      { primary: '06B6D4', secondary: '0E7490', accent: 'CFFAFE', text: '164E63' }, // Cyan
+      { primary: 'A855F7', secondary: '7E22CE', accent: 'F3E8FF', text: '6B21A8' }, // Violet
+    ];
 
     slideData.slides.forEach((slideInfo, index) => {
       const slide = pptx.addSlide();
-
-      // Background gradient
-      slide.background = { color: 'F9FAFB' };
+      const colorScheme = colorSchemes[index % colorSchemes.length];
+      const isLastSlide = index === slideData.slides.length - 1;
 
       if (index === 0) {
-        // Титулдық слайд
-        slide.addText(slideInfo.title, {
-          x: 0.5,
-          y: 2.0,
-          w: 9.0,
-          h: 1.5,
-          fontSize: 44,
-          bold: true,
-          color: primaryColor,
-          align: 'center',
-          valign: 'middle'
-        });
+        // ====== ТИТУЛДЫҚ СЛАЙД ======
 
-        slide.addText(subject, {
-          x: 0.5,
-          y: 3.8,
-          w: 9.0,
-          h: 0.5,
-          fontSize: 24,
-          color: textColor,
-          align: 'center'
-        });
-
-        // Footer
-        slide.addText('Edu-help Platform', {
-          x: 0.5,
-          y: 5.0,
-          w: 9.0,
-          h: 0.3,
-          fontSize: 14,
-          color: '6B7280',
-          align: 'center',
-          italic: true
-        });
-      } else {
-        // Қалыпты слайдтар
-        // Header with gradient box
+        // Gradient background (2 түсті gradient)
         slide.addShape('rect', {
-          x: 0,
-          y: 0,
-          w: 10,
-          h: 1.0,
-          fill: { type: 'solid', color: primaryColor }
+          x: 0, y: 0, w: 10, h: 5.625,
+          fill: { type: 'solid', color: colorScheme.accent }
         });
 
+        // Декоративті үлкен дөңгелек (жоғарыда оң жақта)
+        slide.addShape('ellipse', {
+          x: 7.5, y: -1, w: 4, h: 4,
+          fill: { type: 'solid', color: colorScheme.primary, transparency: 20 },
+          line: { type: 'none' }
+        });
+
+        // Декоративті кіші дөңгелек (төменде сол жақта)
+        slide.addShape('ellipse', {
+          x: -0.5, y: 4, w: 2.5, h: 2.5,
+          fill: { type: 'solid', color: colorScheme.secondary, transparency: 30 },
+          line: { type: 'none' }
+        });
+
+        // Негізгі тақырып (үлкен шрифт, bold)
         slide.addText(slideInfo.title, {
-          x: 0.5,
-          y: 0.25,
-          w: 9.0,
-          h: 0.5,
+          x: 1, y: 1.8, w: 8, h: 1.5,
+          fontSize: 48,
+          bold: true,
+          color: colorScheme.primary,
+          align: 'center',
+          valign: 'middle',
+          fontFace: 'Arial'
+        });
+
+        // Пән атауы (орташа шрифт)
+        slide.addText(subject, {
+          x: 1, y: 3.4, w: 8, h: 0.5,
           fontSize: 28,
+          color: colorScheme.text,
+          align: 'center',
+          fontFace: 'Arial'
+        });
+
+        // Footer жолағы
+        slide.addShape('rect', {
+          x: 0, y: 5.2, w: 10, h: 0.425,
+          fill: { type: 'solid', color: colorScheme.primary }
+        });
+
+        slide.addText('📚 Edu-help Platform', {
+          x: 0.5, y: 5.25, w: 9, h: 0.35,
+          fontSize: 16,
+          color: 'FFFFFF',
+          align: 'center',
+          valign: 'middle',
+          italic: true,
+          fontFace: 'Arial'
+        });
+
+      } else if (isLastSlide) {
+        // ====== ҚОРЫТЫНДЫ СЛАЙД ======
+
+        // Background
+        slide.addShape('rect', {
+          x: 0, y: 0, w: 10, h: 5.625,
+          fill: { type: 'solid', color: colorScheme.accent }
+        });
+
+        // Үлкен градиентті жолақ
+        slide.addShape('rect', {
+          x: 0, y: 1.5, w: 10, h: 2.5,
+          fill: { type: 'solid', color: colorScheme.primary, transparency: 10 }
+        });
+
+        // Қорытынды мәтін
+        slide.addText(slideInfo.title, {
+          x: 1, y: 2, w: 8, h: 1,
+          fontSize: 40,
+          bold: true,
+          color: colorScheme.primary,
+          align: 'center',
+          valign: 'middle',
+          fontFace: 'Arial'
+        });
+
+        // Қорытынды пункттері
+        if (slideInfo.content && slideInfo.content.length > 0) {
+          const bulletText = slideInfo.content.map(item => ({
+            text: item,
+            options: { bullet: { code: '✓' }, fontSize: 18, color: colorScheme.text, paraSpaceBefore: 10 }
+          }));
+
+          slide.addText(bulletText, {
+            x: 2, y: 3.2, w: 6, h: 2,
+            fontSize: 18,
+            color: colorScheme.text,
+            fontFace: 'Arial'
+          });
+        }
+
+        // Рахмет мәтіні
+        slide.addText('🎓 Назарларыңызға рахмет!', {
+          x: 1, y: 4.8, w: 8, h: 0.5,
+          fontSize: 22,
+          bold: true,
+          color: colorScheme.secondary,
+          align: 'center',
+          fontFace: 'Arial'
+        });
+
+      } else {
+        // ====== ҚАЛЫПТЫ КОНТЕНТ СЛАЙДТАРЫ ======
+
+        // Ашық түсті background
+        slide.addShape('rect', {
+          x: 0, y: 0, w: 10, h: 5.625,
+          fill: { type: 'solid', color: 'FFFFFF' }
+        });
+
+        // Header жолағы (gradient)
+        slide.addShape('rect', {
+          x: 0, y: 0, w: 10, h: 1.1,
+          fill: { type: 'solid', color: colorScheme.primary }
+        });
+
+        // Декоративті accent жолақ
+        slide.addShape('rect', {
+          x: 0, y: 0, w: 0.3, h: 1.1,
+          fill: { type: 'solid', color: colorScheme.secondary }
+        });
+
+        // Слайд нөмірі (header-де)
+        slide.addText(`${index}/${slideData.slides.length - 1}`, {
+          x: 8.5, y: 0.3, w: 1, h: 0.5,
+          fontSize: 14,
+          color: 'FFFFFF',
+          align: 'center',
+          valign: 'middle',
+          fontFace: 'Arial'
+        });
+
+        // Слайд тақырыбы (header-де)
+        slide.addText(slideInfo.title, {
+          x: 0.5, y: 0.3, w: 7.5, h: 0.5,
+          fontSize: 30,
           bold: true,
           color: 'FFFFFF',
           align: 'left',
-          valign: 'middle'
+          valign: 'middle',
+          fontFace: 'Arial'
         });
 
-        // Content bullets
-        const bulletText = slideInfo.content.map(item => ({
+        // Сол жақта түрлі-түсті декоративті жолақ
+        slide.addShape('rect', {
+          x: 0.5, y: 1.5, w: 0.15, h: 3.5,
+          fill: { type: 'solid', color: colorScheme.accent }
+        });
+
+        // Content bullets (жақсартылған)
+        const bulletText = slideInfo.content.map((item, i) => ({
           text: item,
-          options: { bullet: true, fontSize: 18, color: textColor, paraSpaceBefore: 12 }
+          options: {
+            bullet: { code: '●' },
+            fontSize: 20,
+            color: colorScheme.text,
+            paraSpaceBefore: 14,
+            paraSpaceAfter: 6
+          }
         }));
 
         slide.addText(bulletText, {
-          x: 1.0,
-          y: 1.8,
-          w: 8.0,
-          h: 3.5,
-          fontSize: 18,
-          color: textColor
+          x: 1.2, y: 1.7, w: 8, h: 3.5,
+          fontSize: 20,
+          color: colorScheme.text,
+          fontFace: 'Arial',
+          lineSpacing: 24
         });
 
         // Slide number
@@ -387,9 +593,9 @@ router.post('/generate-image', protect, async (req, res) => {
       });
     }
 
-    // Hugging Face Inference API - Stable Diffusion v1.5 (тұрақты және тегін)
+    // Hugging Face Inference API - Stable Diffusion XL Turbo (жылдам және сапалы)
     const response = await axios.post(
-      'https://api-inference.huggingface.co/models/runwayml/stable-diffusion-v1-5',
+      'https://api-inference.huggingface.co/models/stabilityai/sdxl-turbo',
       { inputs: prompt },
       {
         headers: {
@@ -397,7 +603,8 @@ router.post('/generate-image', protect, async (req, res) => {
           'Content-Type': 'application/json'
         },
         responseType: 'arraybuffer',
-        validateStatus: (status) => status < 600 // Accept all responses to handle errors
+        validateStatus: (status) => status < 600, // Accept all responses to handle errors
+        timeout: 60000 // 60 секунд timeout
       }
     );
 
