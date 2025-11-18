@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Upload, FileText, Trash2, Check, X } from 'lucide-react';
+import { Upload, FileText, Trash2, Check, X, Edit } from 'lucide-react';
 
 const MaterialUpload = () => {
   const [formData, setFormData] = useState({
@@ -15,6 +15,8 @@ const MaterialUpload = () => {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState({ type: '', message: '' });
   const [materials, setMaterials] = useState([]);
+  const [editMaterial, setEditMaterial] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
 
   useEffect(() => {
     fetchMaterials();
@@ -77,6 +79,37 @@ const MaterialUpload = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEdit = (material) => {
+    setEditMaterial({
+      ...material,
+      classNumber: material.classNumber.toString(),
+      quarter: material.quarter.toString()
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+
+    try {
+      await axios.put(`/api/materials/${editMaterial._id}`, {
+        title: editMaterial.title,
+        description: editMaterial.description,
+        classNumber: parseInt(editMaterial.classNumber),
+        quarter: parseInt(editMaterial.quarter),
+        category: editMaterial.category,
+        subject: editMaterial.subject
+      });
+
+      setStatus({ type: 'success', message: 'Материал жаңартылды!' });
+      setShowEditModal(false);
+      setEditMaterial(null);
+      fetchMaterials();
+    } catch (error) {
+      setStatus({ type: 'error', message: 'Жаңарту қатесі' });
     }
   };
 
@@ -366,12 +399,22 @@ const MaterialUpload = () => {
                   <td className="px-4 py-3 text-sm">{material.quarter}</td>
                   <td className="px-4 py-3 text-sm">{material.category}</td>
                   <td className="px-4 py-3 text-sm">
-                    <button
-                      onClick={() => handleDelete(material._id)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleEdit(material)}
+                        className="text-blue-600 hover:text-blue-800"
+                        title="Өзгерту"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(material._id)}
+                        className="text-red-600 hover:text-red-800"
+                        title="Өшіру"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -379,6 +422,151 @@ const MaterialUpload = () => {
           </table>
         </div>
       </div>
+
+      {/* Edit Modal */}
+      {showEditModal && editMaterial && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-6 border-b sticky top-0 bg-white">
+              <h2 className="text-2xl font-bold">Материалды өзгерту</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <form onSubmit={handleUpdate} className="p-6 space-y-4">
+              {/* Title */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Тақырып *
+                </label>
+                <input
+                  type="text"
+                  value={editMaterial.title}
+                  onChange={(e) => setEditMaterial({ ...editMaterial, title: e.target.value })}
+                  required
+                  className="input-field"
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Сипаттама
+                </label>
+                <textarea
+                  value={editMaterial.description}
+                  onChange={(e) => setEditMaterial({ ...editMaterial, description: e.target.value })}
+                  rows="3"
+                  className="input-field resize-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Class Number */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Сынып *
+                  </label>
+                  <select
+                    value={editMaterial.classNumber}
+                    onChange={(e) => setEditMaterial({ ...editMaterial, classNumber: e.target.value })}
+                    required
+                    className="input-field"
+                  >
+                    {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(num => (
+                      <option key={num} value={num}>{num} сынып</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Quarter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Тоқсан *
+                  </label>
+                  <select
+                    value={editMaterial.quarter}
+                    onChange={(e) => setEditMaterial({ ...editMaterial, quarter: e.target.value })}
+                    required
+                    className="input-field"
+                  >
+                    {[1, 2, 3, 4].map(num => (
+                      <option key={num} value={num}>{num}-тоқсан</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Category */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Категория *
+                  </label>
+                  <select
+                    value={editMaterial.category}
+                    onChange={(e) => setEditMaterial({ ...editMaterial, category: e.target.value })}
+                    required
+                    className="input-field"
+                  >
+                    <option value="ҚМЖ">ҚМЖ</option>
+                    <option value="Презентациялар">Презентациялар</option>
+                    <option value="Жұмыс парақтары">Жұмыс парақтары</option>
+                    <option value="Суреттер">Суреттер</option>
+                    <option value="Басқа">Басқа</option>
+                  </select>
+                </div>
+
+                {/* Subject */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Пән
+                  </label>
+                  <input
+                    type="text"
+                    value={editMaterial.subject || ''}
+                    onChange={(e) => setEditMaterial({ ...editMaterial, subject: e.target.value })}
+                    className="input-field"
+                    placeholder="Мысалы: Математика"
+                  />
+                </div>
+              </div>
+
+              {/* Files Info */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-600">
+                  📎 Файлдар: {editMaterial.files?.length || 1} файл
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Ескерту: Файлдарды өзгерту үшін материалды өшіріп, қайта жүктеу керек
+                </p>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  Болдырмау
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors flex items-center space-x-2"
+                >
+                  <Check className="h-4 w-4" />
+                  <span>Сақтау</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

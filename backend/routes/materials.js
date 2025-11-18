@@ -124,6 +124,56 @@ router.get('/', async (req, res) => {
   }
 });
 
+// @route   GET /api/materials/preview/:id
+// @desc    Материалды браузерде көру (preview)
+// @access  Public
+router.get('/preview/:id', async (req, res) => {
+  try {
+    const material = await Material.findById(req.params.id);
+
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: 'Материал табылмады'
+      });
+    }
+
+    // MIME type анықтау
+    const fs = require('fs');
+    const mimeTypes = {
+      'pdf': 'application/pdf',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'svg': 'image/svg+xml',
+      'mp4': 'video/mp4',
+      'webm': 'video/webm',
+      'mp3': 'audio/mpeg',
+      'wav': 'audio/wav',
+      'ogg': 'audio/ogg',
+      'txt': 'text/plain',
+      'html': 'text/html',
+      'css': 'text/css',
+      'js': 'application/javascript'
+    };
+
+    const contentType = mimeTypes[material.fileType] || 'application/octet-stream';
+
+    // Файлды оқу және жіберу
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', 'inline'); // Браузерде ашу
+    fs.createReadStream(material.filePath).pipe(res);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Файлды көрсету қатесі',
+      error: error.message
+    });
+  }
+});
+
 // @route   GET /api/materials/download/:id
 // @desc    Материалды жүктеп алу
 // @access  Public

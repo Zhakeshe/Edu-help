@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import { Download, FileText, ArrowLeft, Calendar, Filter } from 'lucide-react';
+import { Download, FileText, ArrowLeft, Calendar, Filter, Eye, X } from 'lucide-react';
 
 const MaterialsView = () => {
   const { classNumber } = useParams();
@@ -9,6 +9,8 @@ const MaterialsView = () => {
   const [loading, setLoading] = useState(true);
   const [selectedQuarter, setSelectedQuarter] = useState(1);
   const [fileTypeFilter, setFileTypeFilter] = useState('all');
+  const [previewMaterial, setPreviewMaterial] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     fetchClassData();
@@ -79,6 +81,18 @@ const MaterialsView = () => {
       const materialFileType = material.fileType || material.files?.[0]?.fileType;
       return getFileTypeCategory(materialFileType) === fileTypeFilter;
     });
+  };
+
+  const handlePreview = (material) => {
+    setPreviewMaterial(material);
+    setShowPreview(true);
+  };
+
+  const canPreview = (fileType) => {
+    if (!fileType) return false;
+    const type = fileType.toUpperCase();
+    // Preview қолдау: PDF, суреттер, видео, аудио
+    return ['PDF', 'PNG', 'JPG', 'JPEG', 'GIF', 'WEBP', 'SVG', 'MP4', 'WEBM', 'MP3', 'WAV', 'OGG', 'TXT'].includes(type);
   };
 
   if (loading) {
@@ -217,12 +231,23 @@ const MaterialsView = () => {
                         <span>{material.downloads || 0}</span>
                       </div>
 
-                      <button
-                        onClick={() => handleDownload(material)}
-                        className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
-                      >
-                        Жүктеу
-                      </button>
+                      <div className="flex items-center space-x-2">
+                        {canPreview(material.fileType) && (
+                          <button
+                            onClick={() => handlePreview(material)}
+                            className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium flex items-center space-x-1"
+                          >
+                            <Eye className="h-4 w-4" />
+                            <span>Көру</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDownload(material)}
+                          className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
+                        >
+                          Жүктеу
+                        </button>
+                      </div>
                     </div>
 
                     {/* Files List */}
@@ -266,6 +291,96 @@ const MaterialsView = () => {
         );
         })}
       </div>
+
+      {/* Preview Modal */}
+      {showPreview && previewMaterial && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-6xl w-full max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b">
+              <div>
+                <h2 className="text-xl font-bold text-gray-800">{previewMaterial.title}</h2>
+                <p className="text-sm text-gray-500">{previewMaterial.description}</p>
+              </div>
+              <button
+                onClick={() => setShowPreview(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-auto p-4">
+              {/* PDF Preview */}
+              {previewMaterial.fileType?.toUpperCase() === 'PDF' && (
+                <iframe
+                  src={`/api/materials/preview/${previewMaterial._id}`}
+                  className="w-full h-[600px] border rounded"
+                  title="PDF Preview"
+                />
+              )}
+
+              {/* Image Preview */}
+              {['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP', 'SVG'].includes(previewMaterial.fileType?.toUpperCase()) && (
+                <div className="flex items-center justify-center">
+                  <img
+                    src={`/api/materials/preview/${previewMaterial._id}`}
+                    alt={previewMaterial.title}
+                    className="max-w-full max-h-[600px] object-contain rounded"
+                  />
+                </div>
+              )}
+
+              {/* Video Preview */}
+              {['MP4', 'WEBM'].includes(previewMaterial.fileType?.toUpperCase()) && (
+                <video
+                  src={`/api/materials/preview/${previewMaterial._id}`}
+                  controls
+                  className="w-full max-h-[600px] rounded"
+                />
+              )}
+
+              {/* Audio Preview */}
+              {['MP3', 'WAV', 'OGG'].includes(previewMaterial.fileType?.toUpperCase()) && (
+                <div className="flex items-center justify-center py-20">
+                  <audio
+                    src={`/api/materials/preview/${previewMaterial._id}`}
+                    controls
+                    className="w-full max-w-lg"
+                  />
+                </div>
+              )}
+
+              {/* Text Preview */}
+              {previewMaterial.fileType?.toUpperCase() === 'TXT' && (
+                <iframe
+                  src={`/api/materials/preview/${previewMaterial._id}`}
+                  className="w-full h-[600px] border rounded"
+                  title="Text Preview"
+                />
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-end space-x-3 p-4 border-t bg-gray-50">
+              <button
+                onClick={() => handleDownload(previewMaterial)}
+                className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors flex items-center space-x-2"
+              >
+                <Download className="h-4 w-4" />
+                <span>Жүктеу</span>
+              </button>
+              <button
+                onClick={() => setShowPreview(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Жабу
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
