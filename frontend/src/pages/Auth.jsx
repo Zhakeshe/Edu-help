@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Mail, Phone, Shield, User, Check, ArrowLeft } from 'lucide-react';
+import { Mail, Phone, Shield, User, Check, ArrowLeft, MessageCircle } from 'lucide-react';
 import axios from 'axios';
 
 const Auth = () => {
@@ -36,10 +36,13 @@ const Auth = () => {
   // Identifier типін автоматты анықтау
   useEffect(() => {
     const isEmail = /^\S+@\S+\.\S+$/.test(identifier);
-    const isPhone = /^[\d\+\-\(\)\s]+$/.test(identifier);
+    const isPhone = /^[\d\+\-\(\)\s]+$/.test(identifier) && !identifier.startsWith('@');
+    const isTelegram = identifier.startsWith('@') || (/^\d{9,}$/.test(identifier.replace(/\D/g, '')) && !identifier.startsWith('+'));
 
     if (isEmail) {
       setIdentifierType('email');
+    } else if (isTelegram) {
+      setIdentifierType('telegram');
     } else if (isPhone) {
       setIdentifierType('phone');
     }
@@ -62,8 +65,14 @@ const Auth = () => {
   const handleIdentifierChange = (e) => {
     let value = e.target.value;
 
+    // Telegram username болса (@-пен бастался), форматтамаймыз
+    if (value.startsWith('@')) {
+      setIdentifier(value);
+      return;
+    }
+
     // Егер телефон нөмірі сияқты болса (сандар, +, (, ), -, space)
-    if (/^[\d\+\-\(\)\s]*$/.test(value)) {
+    if (/^[\d\+\-\(\)\s]*$/.test(value) && !value.startsWith('@')) {
       value = formatPhoneNumber(value);
     }
 
@@ -202,8 +211,8 @@ const Auth = () => {
           </h2>
           <p className="text-gray-600">
             {step === 'input'
-              ? 'Email немесе телефон нөміріңізді енгізіңіз'
-              : `Код жіберілді: ${identifierType === 'email' ? 'Email' : 'Телефон'}`
+              ? 'Email, телефон немесе Telegram енгізіңіз'
+              : `Код жіберілді: ${identifierType === 'email' ? 'Email' : identifierType === 'telegram' ? 'Telegram' : 'Телефон'}`
             }
           </p>
         </div>
@@ -215,12 +224,14 @@ const Auth = () => {
             <form onSubmit={handleSendCode} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email немесе Телефон нөмірі
+                  Email, Телефон немесе Telegram
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     {identifierType === 'email' ? (
                       <Mail className="h-5 w-5 text-gray-400" />
+                    ) : identifierType === 'telegram' ? (
+                      <MessageCircle className="h-5 w-5 text-gray-400" />
                     ) : (
                       <Phone className="h-5 w-5 text-gray-400" />
                     )}
@@ -231,12 +242,12 @@ const Auth = () => {
                     onChange={handleIdentifierChange}
                     required
                     className="input-field pl-10"
-                    placeholder="email@example.com немесе +7 700 123 4567"
+                    placeholder="email@example.com, +7 700 123 4567 немесе @username"
                     autoFocus
                   />
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
-                  Сізге 6 санды код жіберіледі
+                  Сізге 6 санды код жіберіледі (Email, SMS немесе Telegram)
                 </p>
               </div>
 
