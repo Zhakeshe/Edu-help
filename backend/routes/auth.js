@@ -196,7 +196,13 @@ router.post('/verify-otp', async (req, res) => {
   try {
     const { identifier, code, fullName } = req.body;
 
+    console.log('\n🔐 === OTP ТЕКСЕРУ БАСТАЛДЫ ===');
+    console.log('Email:', identifier);
+    console.log('Код:', code);
+    console.log('FullName:', fullName || 'жоқ');
+
     if (!identifier || !code) {
+      console.log('❌ Identifier немесе code жоқ');
       return res.status(400).json({
         success: false,
         message: 'Барлық өрістерді толтырыңыз'
@@ -204,20 +210,25 @@ router.post('/verify-otp', async (req, res) => {
     }
 
     // Кодты табу
+    console.log('🔍 Кодты іздеуде...');
     const otpRecord = await OTP.findOne({
       identifier: identifier.toLowerCase(),
       code: code.trim()
     });
 
     if (!otpRecord) {
+      console.log('❌ Код табылмады немесе қате');
       return res.status(400).json({
         success: false,
         message: 'Қате код немесе мерзімі өтіп кеткен'
       });
     }
 
+    console.log('✅ Код табылды');
+
     // Мерзімін тексеру
     if (otpRecord.expiresAt < new Date()) {
+      console.log('❌ Кодтың мерзімі өтіп кеткен');
       await OTP.deleteOne({ _id: otpRecord._id });
       return res.status(400).json({
         success: false,
@@ -225,13 +236,26 @@ router.post('/verify-otp', async (req, res) => {
       });
     }
 
+    console.log('✅ Код жарамды');
+
     // Пайдаланушы немесе админ бар ма тексеру
+    console.log('🔍 Пайдаланушыны іздеуде...');
     let existingUser = await User.findOne({ email: identifier.toLowerCase() });
+
+    if (existingUser) {
+      console.log('✅ Бар пайдаланушы табылды:', existingUser.email, 'Role:', existingUser.role);
+    }
 
     // Егер User-де жоқ болса, Admin моделінен іздейміз (ескі админдер үшін)
     let existingAdmin = null;
     if (!existingUser) {
+      console.log('🔍 Admin моделінен іздеуде...');
       existingAdmin = await Admin.findOne({ email: identifier.toLowerCase() });
+      if (existingAdmin) {
+        console.log('✅ Ескі админ табылды:', existingAdmin.email);
+      } else {
+        console.log('ℹ️ Жаңа пайдаланушы - тіркелу қажет');
+      }
     }
 
     let user;
@@ -239,24 +263,56 @@ router.post('/verify-otp', async (req, res) => {
 
     if (existingUser) {
       // ========== БАР ПАЙДАЛАНУШЫ - КІРУ ==========
+      console.log('📌 Бар пайдаланушы табылды:', existingUser.email);
       user = existingUser;
-      user.stats.lastActive = Date.now();
-      await user.save();
+
+      try {
+        // stats объектісін тексеру
+        if (!user.stats) {
+          user.stats = {
+            materialsDownloaded: 0,
+            aiToolsUsed: 0,
+            lastActive: Date.now()
+          };
+        } else {
+          user.stats.lastActive = Date.now();
+        }
+
+        // Тек stats өрісін өзгерту ретінде белгілеу
+        user.markModified('stats');
+
+        await user.save();
+        console.log('✅ User сақталды');
+      } catch (saveError) {
+        console.error('❌ User.save() қатесі:', saveError.message);
+        console.error('User деректері:', JSON.stringify(user.toObject(), null, 2));
+        throw saveError;
+      }
+
       isAdmin = user.role === 'admin';
 
     } else if (existingAdmin) {
       // ========== БАР АДМИН (ескі Admin моделінен) - КІРУ ==========
+      console.log('📌 Ескі админ табылды, миграциялау...');
       // Admin моделінен User моделіне көшіреміз
-      user = await User.create({
-        fullName: existingAdmin.username,
-        email: existingAdmin.email,
-        authMethod: 'otp',
-        role: 'admin'
-      });
+      try {
+        user = await User.create({
+          fullName: existingAdmin.username,
+          email: existingAdmin.email,
+          authMethod: 'otp',
+          role: 'admin'
+        });
+        console.log('✅ Админ миграцияланды');
+      } catch (createError) {
+        console.error('❌ Админ миграция қатесі:', createError.message);
+        throw createError;
+      }
       isAdmin = true;
 
     } else {
       // ========== ЖАҢА ПАЙДАЛАНУШЫ - ТІРКЕЛУ ==========
+      console.log('📌 Жаңа пайдаланушы тіркелуде...');
+
       if (!fullName || fullName.trim().length < 2) {
         return res.status(400).json({
           success: false,
@@ -265,21 +321,29 @@ router.post('/verify-otp', async (req, res) => {
         });
       }
 
-      user = await User.create({
-        fullName: fullName.trim(),
-        email: identifier.toLowerCase(),
-        authMethod: 'otp',
-        role: 'user' // Жаңа пайдаланушылар user ретінде тіркеледі
-      });
+      try {
+        user = await User.create({
+          fullName: fullName.trim(),
+          email: identifier.toLowerCase(),
+          authMethod: 'otp',
+          role: 'user' // Жаңа пайдаланушылар user ретінде тіркеледі
+        });
+        console.log('✅ Жаңа пайдаланушы тіркелді');
+      } catch (createError) {
+        console.error('❌ User.create() қатесі:', createError.message);
+        throw createError;
+      }
     }
 
     // Кодты өшіру
+    console.log('🗑️ Кодты өшіруде...');
     await OTP.deleteOne({ _id: otpRecord._id });
 
     // Token генерациялау
+    console.log('🔑 Token генерациялауда...');
     const token = generateToken(user._id, user.role);
 
-    res.json({
+    const responseData = {
       success: true,
       isNewUser: !existingUser && !existingAdmin,
       message: (existingUser || existingAdmin) ? 'Жүйеге кірдіңіз!' : 'Тіркелу сәтті өтті!',
@@ -290,14 +354,24 @@ router.post('/verify-otp', async (req, res) => {
         role: user.role,
         token
       }
-    });
+    };
+
+    console.log('✅ OTP тексеру сәтті аяқталды!');
+    console.log('User:', user.email, 'Role:', user.role);
+    console.log('=== OTP ТЕКСЕРУ АЯҚТАЛДЫ ===\n');
+
+    res.json(responseData);
 
   } catch (error) {
-    console.error('OTP тексеру қатесі:', error);
+    console.error('\n❌ === OTP ТЕКСЕРУ ҚАТЕСІ ===');
+    console.error('Қате хабары:', error.message);
+    console.error('Қате стегі:', error.stack);
+    console.error('=== ҚАТЕ АЯҚТАЛДЫ ===\n');
+
     res.status(500).json({
       success: false,
       message: 'Қате орын алды. Қайтадан көріңіз.',
-      error: error.message
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });
