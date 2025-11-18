@@ -8,17 +8,22 @@ const generateOTP = () => {
 // Email арқылы код жіберу
 const sendEmailOTP = async (email, code) => {
   try {
-    // Nodemailer transporter (Gmail немесе басқа SMTP)
+    // Nodemailer transporter (Өз хостингіңіздің SMTP)
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: process.env.SMTP_HOST || 'mail.eduhelp.kz',
+      port: parseInt(process.env.SMTP_PORT) || 465,
+      secure: process.env.SMTP_SECURE === 'true' || true, // true for 465, false for 587
       auth: {
-        user: process.env.EMAIL_USER || 'noreply@eduhelp.kz',
-        pass: process.env.EMAIL_PASS || 'your-app-password'
+        user: process.env.SMTP_USER || 'noreply@eduhelp.kz',
+        pass: process.env.SMTP_PASS || ''
+      },
+      tls: {
+        rejectUnauthorized: false // Кейбір хостингтер үшін керек
       }
     });
 
     const mailOptions = {
-      from: '"Edu-help Platform" <noreply@eduhelp.kz>',
+      from: `"${process.env.EMAIL_FROM_NAME || 'Edu-help Platform'}" <${process.env.EMAIL_FROM_ADDRESS || 'noreply@eduhelp.kz'}>`,
       to: email,
       subject: 'Кіру коды - Edu-help',
       html: `
