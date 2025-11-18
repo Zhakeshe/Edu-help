@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs').promises;
+const fsSync = require('fs');
 const Material = require('../models/Material');
 const { protect, adminOnly } = require('../middleware/auth');
 
@@ -138,8 +140,24 @@ router.get('/preview/:id', async (req, res) => {
       });
     }
 
+    // Файл жолын тексеру
+    if (!material.filePath) {
+      return res.status(404).json({
+        success: false,
+        message: 'Файл жолы табылмады'
+      });
+    }
+
+    // Файлдың дискіде бар-жоғын тексеру
+    if (!fsSync.existsSync(material.filePath)) {
+      console.error(`Файл табылмады: ${material.filePath}`);
+      return res.status(404).json({
+        success: false,
+        message: 'Файл серверде табылмады. Әкімшіге хабарласыңыз.'
+      });
+    }
+
     // MIME type анықтау
-    const fs = require('fs');
     const mimeTypes = {
       'pdf': 'application/pdf',
       'jpg': 'image/jpeg',
@@ -164,13 +182,30 @@ router.get('/preview/:id', async (req, res) => {
     // Файлды оқу және жіберу
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', 'inline'); // Браузерде ашу
-    fs.createReadStream(material.filePath).pipe(res);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Файлды көрсету қатесі',
-      error: error.message
+
+    const stream = fsSync.createReadStream(material.filePath);
+
+    stream.on('error', (err) => {
+      console.error('Файл оқу қатесі:', err);
+      if (!res.headersSent) {
+        return res.status(500).json({
+          success: false,
+          message: 'Файлды оқу кезінде қате пайда болды',
+          error: err.message
+        });
+      }
     });
+
+    stream.pipe(res);
+  } catch (error) {
+    console.error('Preview endpoint қатесі:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Файлды көрсету қатесі',
+        error: error.message
+      });
+    }
   }
 });
 
@@ -188,17 +223,50 @@ router.get('/download/:id', async (req, res) => {
       });
     }
 
+    // Файл жолын тексеру
+    if (!material.filePath) {
+      return res.status(404).json({
+        success: false,
+        message: 'Файл жолы табылмады'
+      });
+    }
+
+    // Файлдың дискіде бар-жоғын тексеру
+    if (!fsSync.existsSync(material.filePath)) {
+      console.error(`Файл табылмады: ${material.filePath}`);
+      return res.status(404).json({
+        success: false,
+        message: 'Файл серверде табылмады. Әкімшіге хабарласыңыз.'
+      });
+    }
+
     // Жүктеу санағышын көбейту
     material.downloads += 1;
     await material.save();
 
-    res.download(material.filePath, material.fileName);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Файлды жүктеу қатесі',
-      error: error.message
+    // Файлды жүктеу
+    res.download(material.filePath, material.fileName, (err) => {
+      if (err) {
+        console.error('Файл жүктеу қатесі:', err);
+        // Егер headers жіберілмесе ғана қате жіберу
+        if (!res.headersSent) {
+          return res.status(500).json({
+            success: false,
+            message: 'Файлды жүктеу кезінде қате пайда болды',
+            error: err.message
+          });
+        }
+      }
     });
+  } catch (error) {
+    console.error('Download endpoint қатесі:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Файлды жүктеу қатесі',
+        error: error.message
+      });
+    }
   }
 });
 
