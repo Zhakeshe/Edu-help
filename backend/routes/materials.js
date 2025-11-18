@@ -17,14 +17,15 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /pdf|doc|docx|ppt|pptx/;
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
+  // Барлық файл типтеріне рұқсат беру
+  // Тек қауіпті файлдарды блоктау (.exe, .bat, .sh, т.б.)
+  const dangerousTypes = /\.exe$|\.bat$|\.cmd$|\.sh$|\.app$/i;
+  const isDangerous = dangerousTypes.test(file.originalname);
 
-  if (extname && mimetype) {
-    cb(null, true);
+  if (isDangerous) {
+    cb(new Error('Қауіпті файл типі! .exe, .bat, .cmd, .sh файлдар рұқсат етілмейді.'));
   } else {
-    cb(new Error('Тек PDF, Word немесе PowerPoint файлдар рұқсат етіледі!'));
+    cb(null, true); // Барлық басқа файлдарға рұқсат
   }
 };
 

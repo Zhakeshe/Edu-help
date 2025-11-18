@@ -25,7 +25,7 @@ const materialSchema = new mongoose.Schema({
   category: {
     type: String,
     required: true,
-    enum: ['КМЖ', 'Презентациялар', 'Жұмыс парақтары']
+    enum: ['ҚМЖ', 'Презентациялар', 'Жұмыс парақтары', 'Суреттер', 'Басқа']
   },
   subject: {
     type: String,
@@ -40,8 +40,8 @@ const materialSchema = new mongoose.Schema({
     required: true
   },
   fileType: {
-    type: String,
-    enum: ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'other']
+    type: String
+    // enum алынды - кез келген файл типіне рұқсат
   },
   fileSize: {
     type: Number

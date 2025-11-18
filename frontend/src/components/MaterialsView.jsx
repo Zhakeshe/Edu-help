@@ -155,7 +155,13 @@ const MaterialsView = () => {
                         {material.fileType?.toUpperCase() === 'PDF' && '📄 PDF құжат'}
                         {['DOC', 'DOCX'].includes(material.fileType?.toUpperCase()) && '📝 Word құжат'}
                         {['PPT', 'PPTX'].includes(material.fileType?.toUpperCase()) && '📊 Презентация'}
-                        {!['PDF', 'DOC', 'DOCX', 'PPT', 'PPTX'].includes(material.fileType?.toUpperCase()) && `📎 ${material.fileType?.toUpperCase()}`}
+                        {['PNG', 'JPG', 'JPEG', 'GIF', 'SVG', 'WEBP'].includes(material.fileType?.toUpperCase()) && '🖼️ Сурет'}
+                        {['TXT', 'MD'].includes(material.fileType?.toUpperCase()) && '📝 Мәтін'}
+                        {['ZIP', 'RAR', '7Z'].includes(material.fileType?.toUpperCase()) && '📦 Архив'}
+                        {['MP4', 'AVI', 'MOV', 'MKV'].includes(material.fileType?.toUpperCase()) && '🎥 Видео'}
+                        {['MP3', 'WAV', 'OGG'].includes(material.fileType?.toUpperCase()) && '🎵 Аудио'}
+                        {['XLS', 'XLSX', 'CSV'].includes(material.fileType?.toUpperCase()) && '📊 Excel'}
+                        {!['PDF', 'DOC', 'DOCX', 'PPT', 'PPTX', 'PNG', 'JPG', 'JPEG', 'GIF', 'SVG', 'WEBP', 'TXT', 'MD', 'ZIP', 'RAR', '7Z', 'MP4', 'AVI', 'MOV', 'MKV', 'MP3', 'WAV', 'OGG', 'XLS', 'XLSX', 'CSV'].includes(material.fileType?.toUpperCase()) && `📎 ${material.fileType?.toUpperCase()}`}
                       </span>
                       {material.fileSize && (
                         <span className="text-gray-400">
