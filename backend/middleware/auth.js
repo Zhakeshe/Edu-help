@@ -13,25 +13,31 @@ const protect = async (req, res, next) => {
       // Token-ды тексеру
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      // Role-ге қарай пайдаланушыны табу
-      if (decoded.role === 'admin') {
-        req.admin = await Admin.findById(decoded.id).select('-password');
-        req.user = req.admin; // Жалпы қолдану үшін
+      // Пайдаланушыны табу - алдымен User моделінен (OTP + миграцияланған админдер)
+      req.user = await User.findById(decoded.id).select('-password');
 
-        if (!req.admin) {
+      if (!req.user) {
+        // User моделінде жоқ болса, ескі Admin моделінен іздеу (backward compatibility)
+        if (decoded.role === 'admin') {
+          req.admin = await Admin.findById(decoded.id).select('-password');
+          req.user = req.admin; // Жалпы қолдану үшін
+
+          if (!req.admin) {
+            return res.status(401).json({
+              success: false,
+              message: 'Рұқсат жоқ, пайдаланушы табылмады'
+            });
+          }
+        } else {
           return res.status(401).json({
             success: false,
             message: 'Рұқсат жоқ, пайдаланушы табылмады'
           });
         }
       } else {
-        req.user = await User.findById(decoded.id).select('-password');
-
-        if (!req.user) {
-          return res.status(401).json({
-            success: false,
-            message: 'Рұқсат жоқ, пайдаланушы табылмады'
-          });
+        // User табылды - admin болса req.admin-ке де қою
+        if (req.user.role === 'admin') {
+          req.admin = req.user;
         }
       }
 
