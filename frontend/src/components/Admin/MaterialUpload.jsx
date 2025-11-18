@@ -134,7 +134,24 @@ const MaterialUpload = () => {
 
   const handleFileChange = (e) => {
     const selectedFiles = Array.from(e.target.files);
-    setFiles(selectedFiles);
+
+    // Файл өлшемін тексеру (500MB = 500 * 1024 * 1024 bytes)
+    const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+    const oversizedFiles = selectedFiles.filter(file => file.size > MAX_FILE_SIZE);
+
+    if (oversizedFiles.length > 0) {
+      const fileNames = oversizedFiles.map(f => `${f.name} (${formatFileSize(f.size)})`).join(', ');
+      setStatus({
+        type: 'error',
+        message: `Кейбір файлдар тым үлкен (макс. 500MB): ${fileNames}`
+      });
+      // Тым үлкен файлдарды алып тастау
+      const validFiles = selectedFiles.filter(file => file.size <= MAX_FILE_SIZE);
+      setFiles(validFiles);
+    } else {
+      setFiles(selectedFiles);
+      setStatus({ type: '', message: '' });
+    }
   };
 
   const removeFile = (index) => {
@@ -263,7 +280,7 @@ const MaterialUpload = () => {
                 Кез келген файл жүктеуге болады (PDF, DOCX, PPTX, TXT, PNG, JPG, MP3, MP4, ZIP, т.б.)
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                📦 Бірнеше файл бірден таңдап жүктей аласыз (макс. 20 файл, әр файл макс. 100MB)
+                📦 Бірнеше файл бірден таңдап жүктей аласыз (макс. 20 файл, әр файл макс. 500MB)
               </p>
               <p className="text-xs text-red-500 mt-1">
                 ⚠️ Қауіпті файлдар (.exe, .bat, .sh) рұқсат етілмейді
