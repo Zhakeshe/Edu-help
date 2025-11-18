@@ -17,7 +17,13 @@ const userSchema = new mongoose.Schema({
   phone: {
     type: String,
     unique: true,
-    sparse: true, // email немесе phone болуы керек
+    sparse: true, // email, phone немесе telegram - біреуі болуы керек
+    trim: true
+  },
+  telegramId: {
+    type: String,
+    unique: true,
+    sparse: true, // email, phone немесе telegram - біреуі болуы керек
     trim: true
   },
   password: {

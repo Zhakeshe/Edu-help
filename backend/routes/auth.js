@@ -5,7 +5,7 @@ const Admin = require('../models/Admin');
 const User = require('../models/User');
 const OTP = require('../models/OTP');
 const { protect } = require('../middleware/auth');
-const { generateOTP, sendEmailOTP, sendSMSOTP } = require('../utils/sendOTP');
+const { generateOTP, sendEmailOTP, sendSMSOTP, sendTelegramOTP } = require('../utils/sendOTP');
 
 // JWT token генерациялау
 const generateToken = (id, role = 'user') => {
@@ -116,31 +116,37 @@ router.get('/me', protect, async (req, res) => {
 // ========================================
 
 // @route   POST /api/auth/send-otp
-// @desc    Email немесе телефон нөміріне код жіберу
+// @desc    Email, телефон немесе Telegram-ға код жіберу
 // @access  Public
 router.post('/send-otp', async (req, res) => {
   try {
-    const { identifier, fullName } = req.body; // identifier = email немесе phone
+    const { identifier, fullName } = req.body; // identifier = email, phone немесе telegram
 
     if (!identifier) {
       return res.status(400).json({
         success: false,
-        message: 'Email немесе телефон нөмірін енгізіңіз'
+        message: 'Email, телефон немесе Telegram енгізіңіз'
       });
     }
 
-    // Email немесе телефон екенін анықтау
+    // Email, телефон немесе Telegram екенін анықтау
     const isEmail = /^\S+@\S+\.\S+$/.test(identifier);
     const isPhone = /^[\d\+\-\(\)\s]+$/.test(identifier);
+    const isTelegram = identifier.startsWith('@') || /^\d{9,}$/.test(identifier.replace(/\D/g, ''));
 
-    if (!isEmail && !isPhone) {
+    let type;
+    if (isEmail) {
+      type = 'email';
+    } else if (isPhone && !isTelegram) {
+      type = 'phone';
+    } else if (isTelegram || identifier.startsWith('@')) {
+      type = 'telegram';
+    } else {
       return res.status(400).json({
         success: false,
-        message: 'Дұрыс email немесе телефон нөмірін енгізіңіз'
+        message: 'Дұрыс email, телефон немесе Telegram енгізіңіз'
       });
     }
-
-    const type = isEmail ? 'email' : 'phone';
 
     // 6 санды код генерациялау
     const code = generateOTP();
@@ -160,23 +166,43 @@ router.post('/send-otp', async (req, res) => {
     let sendResult;
     if (type === 'email') {
       sendResult = await sendEmailOTP(identifier, code);
-    } else {
+    } else if (type === 'phone') {
       sendResult = await sendSMSOTP(identifier, code);
+    } else if (type === 'telegram') {
+      // Telegram ID (@ жоқ) немесе username (@-пен)
+      const telegramId = identifier.startsWith('@') ? identifier.substring(1) : identifier;
+      sendResult = await sendTelegramOTP(telegramId, code);
     }
 
     // Development mode-та кодты қайтарамыз
     if (sendResult.devMode) {
       return res.json({
         success: true,
-        message: `Код ${type === 'email' ? 'email-ге' : 'телефонға'} жіберілді`,
+        message: `Код ${type === 'email' ? 'email-ге' : type === 'phone' ? 'телефонға' : 'Telegram-ға'} жіберілді`,
         devMode: true,
         code: sendResult.code // Тек development-та
       });
     }
 
+    // Егер ботты бастау керек болса
+    if (sendResult.needsBotStart) {
+      return res.status(400).json({
+        success: false,
+        message: sendResult.error,
+        needsBotStart: true
+      });
+    }
+
+    if (!sendResult.success) {
+      return res.status(400).json({
+        success: false,
+        message: sendResult.error || 'Код жіберу қатесі'
+      });
+    }
+
     res.json({
       success: true,
-      message: `Код ${type === 'email' ? 'email-ге' : 'телефонға'} жіберілді. 10 минут ішінде енгізіңіз.`,
+      message: `Код ${type === 'email' ? 'email-ге' : type === 'phone' ? 'телефонға' : 'Telegram-ға'} жіберілді. 10 минут ішінде енгізіңіз.`,
       expiresIn: 600 // секундтарда
     });
 
@@ -226,13 +252,21 @@ router.post('/verify-otp', async (req, res) => {
       });
     }
 
-    // Email немесе phone анықтау
+    // Email, phone немесе telegram анықтау
     const isEmail = otpRecord.type === 'email';
+    const isPhone = otpRecord.type === 'phone';
+    const isTelegram = otpRecord.type === 'telegram';
 
     // Пайдаланушы бар ма тексеру
-    const existingUser = isEmail
-      ? await User.findOne({ email: identifier.toLowerCase() })
-      : await User.findOne({ phone: identifier });
+    let existingUser;
+    if (isEmail) {
+      existingUser = await User.findOne({ email: identifier.toLowerCase() });
+    } else if (isPhone) {
+      existingUser = await User.findOne({ phone: identifier });
+    } else if (isTelegram) {
+      const telegramId = identifier.startsWith('@') ? identifier.substring(1) : identifier;
+      existingUser = await User.findOne({ telegramId: telegramId.toLowerCase() });
+    }
 
     let user;
 
@@ -260,8 +294,11 @@ router.post('/verify-otp', async (req, res) => {
 
       if (isEmail) {
         userData.email = identifier.toLowerCase();
-      } else {
+      } else if (isPhone) {
         userData.phone = identifier;
+      } else if (isTelegram) {
+        const telegramId = identifier.startsWith('@') ? identifier.substring(1) : identifier;
+        userData.telegramId = telegramId.toLowerCase();
       }
 
       user = await User.create(userData);

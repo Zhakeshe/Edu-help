@@ -1,4 +1,15 @@
 const nodemailer = require('nodemailer');
+const TelegramBot = require('node-telegram-bot-api');
+
+// Telegram Bot instance (тек қажет болғанда іске қосамыз)
+let telegramBot = null;
+
+const getTelegramBot = () => {
+  if (!telegramBot && process.env.TELEGRAM_BOT_TOKEN) {
+    telegramBot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: false });
+  }
+  return telegramBot;
+};
 
 // 6 санды код генерациялау
 const generateOTP = () => {
@@ -169,8 +180,83 @@ const sendSMSOTP = async (phone, code) => {
   }
 };
 
+// Telegram арқылы код жіберу (ТЕГІН! 🎉)
+const sendTelegramOTP = async (telegramId, code) => {
+  try {
+    // Development mode - тек консольға шығару
+    if (!process.env.TELEGRAM_BOT_TOKEN) {
+      console.log(`\n💬 Telegram код (DEV MODE):`);
+      console.log(`   Telegram ID/Username: ${telegramId}`);
+      console.log(`   Код: ${code}`);
+      console.log(`   Мерзімі: 10 минут`);
+      console.log(`   ⚠️  TELEGRAM_BOT_TOKEN жоқ (.env файлында қосыңыз)\n`);
+
+      return {
+        success: true,
+        devMode: true,
+        message: 'Telegram жіберу функциясы әзірлеу режимінде. Код консольда.',
+        code
+      };
+    }
+
+    const bot = getTelegramBot();
+
+    if (!bot) {
+      throw new Error('Telegram Bot інициализациялау қатесі');
+    }
+
+    // Telegram хабарламасы (emoji және форматтаумен)
+    const message = `
+🎓 *Edu-help Platform*
+
+🔐 Сіздің кіру кодыңыз:
+
+\`${code}\`
+
+⏰ Код *10 минут* ішінде жарамды.
+
+_Егер сіз бұл кодты сұрамаған болсаңыз, бұл хабарламаны елемеңіз._
+    `.trim();
+
+    // Telegram-ға жіберу
+    await bot.sendMessage(telegramId, message, {
+      parse_mode: 'Markdown',
+      disable_web_page_preview: true
+    });
+
+    console.log(`✅ Telegram код жіберілді: ${telegramId}`);
+
+    return {
+      success: true,
+      message: 'Telegram хабарламасы жіберілді'
+    };
+  } catch (error) {
+    console.error('❌ Telegram жіберу қатесі:', error.message);
+
+    // Қате болса, консольға жазамыз (development үшін)
+    console.log(`\n💬 Development mode - Telegram код: ${code} → ${telegramId}\n`);
+
+    // Егер пайдаланушы ботты бастамаған болса
+    if (error.message.includes('bot was blocked') || error.message.includes('user not found')) {
+      return {
+        success: false,
+        error: 'Telegram ботын бастаңыз! @YourBotName ботын іске қосып, /start басыңыз.',
+        needsBotStart: true
+      };
+    }
+
+    return {
+      success: false,
+      error: 'Telegram жіберу қатесі. Қайтадан көріңіз.',
+      devMode: true,
+      code: process.env.NODE_ENV === 'development' ? code : undefined
+    };
+  }
+};
+
 module.exports = {
   generateOTP,
   sendEmailOTP,
-  sendSMSOTP
+  sendSMSOTP,
+  sendTelegramOTP
 };
