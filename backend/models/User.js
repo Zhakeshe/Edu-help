@@ -9,15 +9,26 @@ const userSchema = new mongoose.Schema({
   },
   email: {
     type: String,
-    required: [true, 'Email енгізіңіз'],
     unique: true,
+    sparse: true, // email немесе phone болуы керек
     lowercase: true,
     match: [/^\S+@\S+\.\S+$/, 'Дұрыс email енгізіңіз']
   },
+  phone: {
+    type: String,
+    unique: true,
+    sparse: true, // email немесе phone болуы керек
+    trim: true
+  },
   password: {
     type: String,
-    required: [true, 'Құпия сөз енгізіңіз'],
+    // OTP арқылы кірсе, құпия сөз болмайды
     minlength: [6, 'Құпия сөз кем дегенде 6 символ болуы керек']
+  },
+  authMethod: {
+    type: String,
+    enum: ['password', 'otp'],
+    default: 'password'
   },
   avatar: {
     type: String,
