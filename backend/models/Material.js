@@ -31,17 +31,32 @@ const materialSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  // Бірнеше файл қолдауы
+  files: [{
+    fileName: {
+      type: String,
+      required: true
+    },
+    filePath: {
+      type: String,
+      required: true
+    },
+    fileType: {
+      type: String
+    },
+    fileSize: {
+      type: Number
+    }
+  }],
+  // Ескі полялар (backward compatibility үшін)
   fileName: {
-    type: String,
-    required: true
+    type: String
   },
   filePath: {
-    type: String,
-    required: true
+    type: String
   },
   fileType: {
     type: String
-    // enum алынды - кез келген файл типіне рұқсат
   },
   fileSize: {
     type: Number

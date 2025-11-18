@@ -57,7 +57,8 @@ const userSchema = new mongoose.Schema({
 
 // Құпия сөзді хэштеу
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
+  // Password жоқ болса немесе өзгермесе - өткізіп жіберу
+  if (!this.isModified('password') || !this.password) return next();
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });

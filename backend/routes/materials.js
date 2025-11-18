@@ -32,24 +32,34 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB
+  limits: { fileSize: 100 * 1024 * 1024 } // 100MB
 });
 
 // @route   POST /api/upload
-// @desc    Файл жүктеу
+// @desc    Файл(дар) жүктеу (бірнеше файл қолдауымен)
 // @access  Private (Тек админдер)
-router.post('/upload', protect, adminOnly, upload.single('file'), async (req, res) => {
+router.post('/upload', protect, adminOnly, upload.array('files', 20), async (req, res) => {
   try {
-    if (!req.file) {
+    if (!req.files || req.files.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Файл таңдалмады'
+        message: 'Файл(дар) таңдалмады'
       });
     }
 
     const { title, description, classNumber, quarter, category, subject } = req.body;
 
-    const fileType = path.extname(req.file.originalname).toLowerCase().replace('.', '');
+    // Барлық файлдарды files массивіне жинау
+    const filesArray = req.files.map(file => ({
+      fileName: file.originalname,
+      filePath: file.path,
+      fileType: path.extname(file.originalname).toLowerCase().replace('.', ''),
+      fileSize: file.size
+    }));
+
+    // Backward compatibility үшін - бірінші файлды негізгі полярға қосамыз
+    const firstFile = req.files[0];
+    const fileType = path.extname(firstFile.originalname).toLowerCase().replace('.', '');
 
     const material = await Material.create({
       title,
@@ -58,16 +68,20 @@ router.post('/upload', protect, adminOnly, upload.single('file'), async (req, re
       quarter: parseInt(quarter),
       category,
       subject,
-      fileName: req.file.originalname,
-      filePath: req.file.path,
+      // Бірнеше файл
+      files: filesArray,
+      // Backward compatibility үшін
+      fileName: firstFile.originalname,
+      filePath: firstFile.path,
       fileType,
-      fileSize: req.file.size,
-      uploadedBy: req.user._id  // req.admin емес, req.user қолданамыз
+      fileSize: firstFile.size,
+      uploadedBy: req.user._id
     });
 
     res.status(201).json({
       success: true,
-      data: material
+      data: material,
+      filesCount: filesArray.length
     });
   } catch (error) {
     res.status(500).json({
@@ -105,6 +119,56 @@ router.get('/', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Материалдарды алу қатесі',
+      error: error.message
+    });
+  }
+});
+
+// @route   GET /api/materials/preview/:id
+// @desc    Материалды браузерде көру (preview)
+// @access  Public
+router.get('/preview/:id', async (req, res) => {
+  try {
+    const material = await Material.findById(req.params.id);
+
+    if (!material) {
+      return res.status(404).json({
+        success: false,
+        message: 'Материал табылмады'
+      });
+    }
+
+    // MIME type анықтау
+    const fs = require('fs');
+    const mimeTypes = {
+      'pdf': 'application/pdf',
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'svg': 'image/svg+xml',
+      'mp4': 'video/mp4',
+      'webm': 'video/webm',
+      'mp3': 'audio/mpeg',
+      'wav': 'audio/wav',
+      'ogg': 'audio/ogg',
+      'txt': 'text/plain',
+      'html': 'text/html',
+      'css': 'text/css',
+      'js': 'application/javascript'
+    };
+
+    const contentType = mimeTypes[material.fileType] || 'application/octet-stream';
+
+    // Файлды оқу және жіберу
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', 'inline'); // Браузерде ашу
+    fs.createReadStream(material.filePath).pipe(res);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Файлды көрсету қатесі',
       error: error.message
     });
   }

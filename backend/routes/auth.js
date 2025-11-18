@@ -190,7 +190,7 @@ router.post('/send-otp', async (req, res) => {
 });
 
 // @route   POST /api/auth/verify-otp
-// @desc    Кодты тексеру және кіру/тіркелу
+// @desc    Кодты тексеру және кіру/тіркелу (USER және ADMIN үшін)
 // @access  Public
 router.post('/verify-otp', async (req, res) => {
   try {
@@ -225,19 +225,38 @@ router.post('/verify-otp', async (req, res) => {
       });
     }
 
-    // Пайдаланушы бар ма тексеру
-    const existingUser = await User.findOne({ email: identifier.toLowerCase() });
+    // Пайдаланушы немесе админ бар ма тексеру
+    let existingUser = await User.findOne({ email: identifier.toLowerCase() });
+
+    // Егер User-де жоқ болса, Admin моделінен іздейміз (ескі админдер үшін)
+    let existingAdmin = null;
+    if (!existingUser) {
+      existingAdmin = await Admin.findOne({ email: identifier.toLowerCase() });
+    }
 
     let user;
+    let isAdmin = false;
 
     if (existingUser) {
-      // ========== КІРУ ==========
+      // ========== БАР ПАЙДАЛАНУШЫ - КІРУ ==========
       user = existingUser;
       user.stats.lastActive = Date.now();
       await user.save();
+      isAdmin = user.role === 'admin';
+
+    } else if (existingAdmin) {
+      // ========== БАР АДМИН (ескі Admin моделінен) - КІРУ ==========
+      // Admin моделінен User моделіне көшіреміз
+      user = await User.create({
+        fullName: existingAdmin.username,
+        email: existingAdmin.email,
+        authMethod: 'otp',
+        role: 'admin'
+      });
+      isAdmin = true;
 
     } else {
-      // ========== ТІРКЕЛУ ==========
+      // ========== ЖАҢА ПАЙДАЛАНУШЫ - ТІРКЕЛУ ==========
       if (!fullName || fullName.trim().length < 2) {
         return res.status(400).json({
           success: false,
@@ -250,7 +269,7 @@ router.post('/verify-otp', async (req, res) => {
         fullName: fullName.trim(),
         email: identifier.toLowerCase(),
         authMethod: 'otp',
-        role: 'user'
+        role: 'user' // Жаңа пайдаланушылар user ретінде тіркеледі
       });
     }
 
@@ -262,8 +281,8 @@ router.post('/verify-otp', async (req, res) => {
 
     res.json({
       success: true,
-      isNewUser: !existingUser,
-      message: existingUser ? 'Жүйеге кірдіңіз!' : 'Тіркелу сәтті өтті!',
+      isNewUser: !existingUser && !existingAdmin,
+      message: (existingUser || existingAdmin) ? 'Жүйеге кірдіңіз!' : 'Тіркелу сәтті өтті!',
       data: {
         id: user._id,
         fullName: user.fullName,
