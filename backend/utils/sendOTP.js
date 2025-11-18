@@ -75,57 +75,7 @@ const sendEmailOTP = async (email, code) => {
   }
 };
 
-// SMS арқылы код жіберу
-const sendSMSOTP = async (phone, code) => {
-  try {
-    // TODO: SMS API интеграциясы (Twilio, Vonage, т.б.)
-    // Қазір console.log-пен тестілейміз
-
-    console.log(`\n📱 SMS код жіберілді:`);
-    console.log(`   Телефон: ${phone}`);
-    console.log(`   Код: ${code}`);
-    console.log(`   Мерзімі: 10 минут\n`);
-
-    // Development mode-та код қайтарамыз
-    if (process.env.NODE_ENV === 'development') {
-      return {
-        success: true,
-        devMode: true,
-        message: 'SMS жіберу функциясы әзірлеу режимінде. Код консольда.',
-        code
-      };
-    }
-
-    // Production mode-та SMS API қолдану керек
-    // Мысалы: Twilio, Vonage, Infobip т.б.
-    /*
-    const twilioClient = require('twilio')(
-      process.env.TWILIO_ACCOUNT_SID,
-      process.env.TWILIO_AUTH_TOKEN
-    );
-
-    await twilioClient.messages.create({
-      body: `Edu-help кіру коды: ${code}. Код 10 минут жарамды.`,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: phone
-    });
-    */
-
-    return {
-      success: true,
-      message: 'SMS жіберілді (dev mode)'
-    };
-  } catch (error) {
-    console.error('❌ SMS жіберу қатесі:', error.message);
-    return {
-      success: false,
-      error: 'SMS жіберу қатесі. Қайтадан көріңіз.'
-    };
-  }
-};
-
 module.exports = {
   generateOTP,
-  sendEmailOTP,
-  sendSMSOTP
+  sendEmailOTP
 };

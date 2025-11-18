@@ -10,15 +10,9 @@ const userSchema = new mongoose.Schema({
   email: {
     type: String,
     unique: true,
-    sparse: true, // email немесе phone болуы керек
+    sparse: true,
     lowercase: true,
     match: [/^\S+@\S+\.\S+$/, 'Дұрыс email енгізіңіз']
-  },
-  phone: {
-    type: String,
-    unique: true,
-    sparse: true, // email немесе phone болуы керек
-    trim: true
   },
   password: {
     type: String,

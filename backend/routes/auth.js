@@ -5,7 +5,7 @@ const Admin = require('../models/Admin');
 const User = require('../models/User');
 const OTP = require('../models/OTP');
 const { protect } = require('../middleware/auth');
-const { generateOTP, sendEmailOTP, sendSMSOTP } = require('../utils/sendOTP');
+const { generateOTP, sendEmailOTP } = require('../utils/sendOTP');
 
 // JWT token генерациялау
 const generateToken = (id, role = 'user') => {
@@ -116,31 +116,28 @@ router.get('/me', protect, async (req, res) => {
 // ========================================
 
 // @route   POST /api/auth/send-otp
-// @desc    Email немесе телефон нөміріне код жіберу
+// @desc    Email-ге код жіберу
 // @access  Public
 router.post('/send-otp', async (req, res) => {
   try {
-    const { identifier, fullName } = req.body; // identifier = email немесе phone
+    const { identifier } = req.body; // identifier = email
 
     if (!identifier) {
       return res.status(400).json({
         success: false,
-        message: 'Email немесе телефон нөмірін енгізіңіз'
+        message: 'Email енгізіңіз'
       });
     }
 
-    // Email немесе телефон екенін анықтау
+    // Email екенін тексеру
     const isEmail = /^\S+@\S+\.\S+$/.test(identifier);
-    const isPhone = /^[\d\+\-\(\)\s]+$/.test(identifier);
 
-    if (!isEmail && !isPhone) {
+    if (!isEmail) {
       return res.status(400).json({
         success: false,
-        message: 'Дұрыс email немесе телефон нөмірін енгізіңіз'
+        message: 'Дұрыс email енгізіңіз'
       });
     }
-
-    const type = isEmail ? 'email' : 'phone';
 
     // 6 санды код генерациялау
     const code = generateOTP();
@@ -152,31 +149,33 @@ router.post('/send-otp', async (req, res) => {
     await OTP.create({
       identifier: identifier.toLowerCase(),
       code,
-      type,
+      type: 'email',
       expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 минут
     });
 
-    // Код жіберу
-    let sendResult;
-    if (type === 'email') {
-      sendResult = await sendEmailOTP(identifier, code);
-    } else {
-      sendResult = await sendSMSOTP(identifier, code);
-    }
+    // Email жіберу
+    const sendResult = await sendEmailOTP(identifier, code);
 
     // Development mode-та кодты қайтарамыз
     if (sendResult.devMode) {
       return res.json({
         success: true,
-        message: `Код ${type === 'email' ? 'email-ге' : 'телефонға'} жіберілді`,
+        message: 'Код email-ге жіберілді',
         devMode: true,
         code: sendResult.code // Тек development-та
       });
     }
 
+    if (!sendResult.success) {
+      return res.status(400).json({
+        success: false,
+        message: sendResult.error || 'Код жіберу қатесі'
+      });
+    }
+
     res.json({
       success: true,
-      message: `Код ${type === 'email' ? 'email-ге' : 'телефонға'} жіберілді. 10 минут ішінде енгізіңіз.`,
+      message: 'Код email-ге жіберілді. 10 минут ішінде енгізіңіз.',
       expiresIn: 600 // секундтарда
     });
 
@@ -226,13 +225,8 @@ router.post('/verify-otp', async (req, res) => {
       });
     }
 
-    // Email немесе phone анықтау
-    const isEmail = otpRecord.type === 'email';
-
     // Пайдаланушы бар ма тексеру
-    const existingUser = isEmail
-      ? await User.findOne({ email: identifier.toLowerCase() })
-      : await User.findOne({ phone: identifier });
+    const existingUser = await User.findOne({ email: identifier.toLowerCase() });
 
     let user;
 
@@ -252,19 +246,12 @@ router.post('/verify-otp', async (req, res) => {
         });
       }
 
-      const userData = {
+      user = await User.create({
         fullName: fullName.trim(),
+        email: identifier.toLowerCase(),
         authMethod: 'otp',
         role: 'user'
-      };
-
-      if (isEmail) {
-        userData.email = identifier.toLowerCase();
-      } else {
-        userData.phone = identifier;
-      }
-
-      user = await User.create(userData);
+      });
     }
 
     // Кодты өшіру
@@ -281,7 +268,6 @@ router.post('/verify-otp', async (req, res) => {
         id: user._id,
         fullName: user.fullName,
         email: user.email,
-        phone: user.phone,
         role: user.role,
         token
       }

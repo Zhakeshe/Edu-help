@@ -1,16 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Mail, Phone, Shield, User, Check, ArrowLeft } from 'lucide-react';
+import { Mail, User, Check, ArrowLeft } from 'lucide-react';
 import axios from 'axios';
 
 const Auth = () => {
   // State
   const [step, setStep] = useState('input'); // 'input' | 'verify'
-  const [identifier, setIdentifier] = useState(''); // email немесе phone
+  const [identifier, setIdentifier] = useState(''); // email
   const [fullName, setFullName] = useState('');
   const [code, setCode] = useState(['', '', '', '', '', '']); // 6 санды код
-  const [identifierType, setIdentifierType] = useState('email'); // 'email' | 'phone'
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [timer, setTimer] = useState(0); // Countdown timer
@@ -33,17 +32,6 @@ const Auth = () => {
     }
   }, [timer]);
 
-  // Identifier типін автоматты анықтау
-  useEffect(() => {
-    const isEmail = /^\S+@\S+\.\S+$/.test(identifier);
-    const isPhone = /^[\d\+\-\(\)\s]+$/.test(identifier);
-
-    if (isEmail) {
-      setIdentifierType('email');
-    } else if (isPhone) {
-      setIdentifierType('phone');
-    }
-  }, [identifier]);
 
   // Код жіберу
   const handleSendCode = async (e) => {
@@ -177,8 +165,8 @@ const Auth = () => {
           </h2>
           <p className="text-gray-600">
             {step === 'input'
-              ? 'Email немесе телефон нөміріңізді енгізіңіз'
-              : `Код жіберілді: ${identifierType === 'email' ? 'Email' : 'Телефон'}`
+              ? 'Email енгізіңіз'
+              : 'Код email-ге жіберілді'
             }
           </p>
         </div>
@@ -190,23 +178,19 @@ const Auth = () => {
             <form onSubmit={handleSendCode} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email немесе Телефон нөмірі
+                  Email
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    {identifierType === 'email' ? (
-                      <Mail className="h-5 w-5 text-gray-400" />
-                    ) : (
-                      <Phone className="h-5 w-5 text-gray-400" />
-                    )}
+                    <Mail className="h-5 w-5 text-gray-400" />
                   </div>
                   <input
-                    type="text"
+                    type="email"
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
                     required
                     className="input-field pl-10"
-                    placeholder="email@example.com немесе +7 700 123 4567"
+                    placeholder="email@example.com"
                     autoFocus
                   />
                 </div>
