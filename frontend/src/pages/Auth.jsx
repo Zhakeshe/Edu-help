@@ -45,6 +45,31 @@ const Auth = () => {
     }
   }, [identifier]);
 
+  // Телефон нөмірін форматтау (Қазақстан үшін)
+  const formatPhoneNumber = (value) => {
+    // Тек сандар мен + қалдыру
+    const cleaned = value.replace(/[^\d+]/g, '');
+
+    // Егер +7 болмаса және сан енгізсе, +7 қосу
+    if (cleaned.length > 0 && !cleaned.startsWith('+')) {
+      return '+7' + cleaned;
+    }
+
+    return cleaned;
+  };
+
+  // Identifier өзгерту (телефон форматымен)
+  const handleIdentifierChange = (e) => {
+    let value = e.target.value;
+
+    // Егер телефон нөмірі сияқты болса (сандар, +, (, ), -, space)
+    if (/^[\d\+\-\(\)\s]*$/.test(value)) {
+      value = formatPhoneNumber(value);
+    }
+
+    setIdentifier(value);
+  };
+
   // Код жіберу
   const handleSendCode = async (e) => {
     e.preventDefault();
@@ -203,7 +228,7 @@ const Auth = () => {
                   <input
                     type="text"
                     value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
+                    onChange={handleIdentifierChange}
                     required
                     className="input-field pl-10"
                     placeholder="email@example.com немесе +7 700 123 4567"

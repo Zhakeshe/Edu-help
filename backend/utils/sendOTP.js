@@ -75,19 +75,20 @@ const sendEmailOTP = async (email, code) => {
   }
 };
 
-// SMS арқылы код жіберу
+// SMS арқылы код жіберу (SMSC.kz API)
 const sendSMSOTP = async (phone, code) => {
   try {
-    // TODO: SMS API интеграциясы (Twilio, Vonage, т.б.)
-    // Қазір console.log-пен тестілейміз
+    // Телефон нөмірін форматтау (+7 → 7)
+    const cleanPhone = phone.replace(/[^\d]/g, '');
 
-    console.log(`\n📱 SMS код жіберілді:`);
-    console.log(`   Телефон: ${phone}`);
-    console.log(`   Код: ${code}`);
-    console.log(`   Мерзімі: 10 минут\n`);
+    // Development mode - тек консольға шығару
+    if (!process.env.SMSC_LOGIN || !process.env.SMSC_PASSWORD) {
+      console.log(`\n📱 SMS код (DEV MODE):`);
+      console.log(`   Телефон: ${phone}`);
+      console.log(`   Код: ${code}`);
+      console.log(`   Мерзімі: 10 минут`);
+      console.log(`   ⚠️  SMSC конфигурациясы жоқ (.env файлында SMSC_LOGIN/SMSC_PASSWORD қосыңыз)\n`);
 
-    // Development mode-та код қайтарамыз
-    if (process.env.NODE_ENV === 'development') {
       return {
         success: true,
         devMode: true,
@@ -96,30 +97,74 @@ const sendSMSOTP = async (phone, code) => {
       };
     }
 
-    // Production mode-та SMS API қолдану керек
-    // Мысалы: Twilio, Vonage, Infobip т.б.
-    /*
-    const twilioClient = require('twilio')(
-      process.env.TWILIO_ACCOUNT_SID,
-      process.env.TWILIO_AUTH_TOKEN
-    );
+    // SMSC.kz API арқылы SMS жіберу
+    const https = require('https');
+    const querystring = require('querystring');
 
-    await twilioClient.messages.create({
-      body: `Edu-help кіру коды: ${code}. Код 10 минут жарамды.`,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: phone
+    const params = querystring.stringify({
+      login: process.env.SMSC_LOGIN,
+      psw: process.env.SMSC_PASSWORD,
+      phones: cleanPhone,
+      mes: `Edu-help кіру коды: ${code}. Код 10 минут жарамды.`,
+      sender: process.env.SMSC_SENDER || 'Edu-help',
+      charset: 'utf-8'
     });
-    */
 
-    return {
-      success: true,
-      message: 'SMS жіберілді (dev mode)'
-    };
+    const url = `https://smsc.kz/sys/send.php?${params}`;
+
+    return new Promise((resolve, reject) => {
+      https.get(url, (res) => {
+        let data = '';
+
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+
+        res.on('end', () => {
+          try {
+            // SMSC жауабын парсинг
+            const response = JSON.parse(data);
+
+            if (response.error) {
+              console.error('❌ SMSC қатесі:', response.error_code, response.error);
+              resolve({
+                success: false,
+                error: 'SMS жіберу қатесі. Қайтадан көріңіз.'
+              });
+            } else {
+              console.log(`✅ SMS жіберілді: ${phone} (ID: ${response.id})`);
+              resolve({
+                success: true,
+                message: 'SMS жіберілді'
+              });
+            }
+          } catch (parseError) {
+            console.error('❌ SMSC жауабын парсинг қатесі:', parseError.message);
+            resolve({
+              success: false,
+              error: 'SMS жіберу қатесі. Қайтадан көріңіз.'
+            });
+          }
+        });
+      }).on('error', (error) => {
+        console.error('❌ SMS жіберу қатесі:', error.message);
+        resolve({
+          success: false,
+          error: 'SMS жіберу қатесі. Қайтадан көріңіз.'
+        });
+      });
+    });
   } catch (error) {
     console.error('❌ SMS жіберу қатесі:', error.message);
+
+    // Қате болса, консольға жазамыз (development үшін)
+    console.log(`\n📱 Development mode - SMS код: ${code} → ${phone}\n`);
+
     return {
       success: false,
-      error: 'SMS жіберу қатесі. Қайтадан көріңіз.'
+      error: 'SMS жіберу қатесі. Қайтадан көріңіз.',
+      devMode: true,
+      code: process.env.NODE_ENV === 'development' ? code : undefined
     };
   }
 };
