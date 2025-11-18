@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const Material = require('../models/Material');
-const { protect } = require('../middleware/auth');
+const { protect, adminOnly } = require('../middleware/auth');
 
 // Multer конфигурациясы
 const storage = multer.diskStorage({
@@ -17,14 +17,15 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /pdf|doc|docx|ppt|pptx/;
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
+  // Барлық файл типтеріне рұқсат беру
+  // Тек қауіпті файлдарды блоктау (.exe, .bat, .sh, т.б.)
+  const dangerousTypes = /\.exe$|\.bat$|\.cmd$|\.sh$|\.app$/i;
+  const isDangerous = dangerousTypes.test(file.originalname);
 
-  if (extname && mimetype) {
-    cb(null, true);
+  if (isDangerous) {
+    cb(new Error('Қауіпті файл типі! .exe, .bat, .cmd, .sh файлдар рұқсат етілмейді.'));
   } else {
-    cb(new Error('Тек PDF, Word немесе PowerPoint файлдар рұқсат етіледі!'));
+    cb(null, true); // Барлық басқа файлдарға рұқсат
   }
 };
 
@@ -36,8 +37,8 @@ const upload = multer({
 
 // @route   POST /api/upload
 // @desc    Файл жүктеу
-// @access  Private
-router.post('/upload', protect, upload.single('file'), async (req, res) => {
+// @access  Private (Тек админдер)
+router.post('/upload', protect, adminOnly, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -61,7 +62,7 @@ router.post('/upload', protect, upload.single('file'), async (req, res) => {
       filePath: req.file.path,
       fileType,
       fileSize: req.file.size,
-      uploadedBy: req.admin._id
+      uploadedBy: req.user._id  // req.admin емес, req.user қолданамыз
     });
 
     res.status(201).json({
@@ -167,8 +168,8 @@ router.get('/:id', async (req, res) => {
 
 // @route   PUT /api/materials/:id
 // @desc    Материалды жаңарту
-// @access  Private
-router.put('/:id', protect, async (req, res) => {
+// @access  Private (Тек админдер)
+router.put('/:id', protect, adminOnly, async (req, res) => {
   try {
     const material = await Material.findByIdAndUpdate(
       req.params.id,
@@ -198,8 +199,8 @@ router.put('/:id', protect, async (req, res) => {
 
 // @route   DELETE /api/materials/:id
 // @desc    Материалды өшіру
-// @access  Private
-router.delete('/:id', protect, async (req, res) => {
+// @access  Private (Тек админдер)
+router.delete('/:id', protect, adminOnly, async (req, res) => {
   try {
     const material = await Material.findById(req.params.id);
 

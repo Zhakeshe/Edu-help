@@ -184,6 +184,8 @@ const MaterialUpload = () => {
                 <option value="ҚМЖ">ҚМЖ</option>
                 <option value="Презентациялар">Презентациялар</option>
                 <option value="Жұмыс парақтары">Жұмыс парақтары</option>
+                <option value="Суреттер">Суреттер</option>
+                <option value="Басқа">Басқа</option>
               </select>
             </div>
 
@@ -195,12 +197,14 @@ const MaterialUpload = () => {
               <input
                 type="file"
                 onChange={(e) => setFile(e.target.files[0])}
-                accept=".pdf,.doc,.docx,.ppt,.pptx"
                 required
                 className="input-field"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Қабылданатын форматтар: PDF, DOC, DOCX, PPT, PPTX
+                Кез келген файл жүктеуге болады (PDF, DOCX, PPTX, TXT, PNG, JPG, ZIP, т.б.)
+              </p>
+              <p className="text-xs text-red-500 mt-1">
+                ⚠️ Қауіпті файлдар (.exe, .bat, .sh) рұқсат етілмейді
               </p>
               {file && (
                 <p className="text-sm text-green-600 mt-1 flex items-center">
