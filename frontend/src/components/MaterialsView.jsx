@@ -24,19 +24,20 @@ const MaterialsView = () => {
     }
   };
 
-  const handleDownload = async (materialId) => {
+  const handleDownload = async (material) => {
     try {
-      const res = await axios.get(`/api/materials/download/${materialId}`, {
+      const res = await axios.get(`/api/materials/download/${material._id}`, {
         responseType: 'blob'
       });
 
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', 'material.pdf');
+      link.setAttribute('download', material.fileName); // Дұрыс fileName қолдану
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.URL.revokeObjectURL(url); // Memory leak-тен сақтау
     } catch (error) {
       console.error('Жүктеу қатесі:', error);
       alert('Файлды жүктеу мүмкін болмады');
@@ -143,7 +144,7 @@ const MaterialsView = () => {
                       </div>
 
                       <button
-                        onClick={() => handleDownload(material._id)}
+                        onClick={() => handleDownload(material)}
                         className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
                       >
                         Жүктеу
