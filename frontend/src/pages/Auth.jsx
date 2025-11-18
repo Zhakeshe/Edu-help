@@ -1,265 +1,362 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogIn, UserPlus, Mail, Lock, User, Shield } from 'lucide-react';
+import { Mail, Phone, Shield, User, Check, ArrowLeft } from 'lucide-react';
+import axios from 'axios';
 
 const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
-  const [isAdminLogin, setIsAdminLogin] = useState(false);
-  const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
-    password: ''
-  });
+  // State
+  const [step, setStep] = useState('input'); // 'input' | 'verify'
+  const [identifier, setIdentifier] = useState(''); // email немесе phone
+  const [fullName, setFullName] = useState('');
+  const [code, setCode] = useState(['', '', '', '', '', '']); // 6 санды код
+  const [identifierType, setIdentifierType] = useState('email'); // 'email' | 'phone'
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [timer, setTimer] = useState(0); // Countdown timer
+  const [showFullNameInput, setShowFullNameInput] = useState(false);
+  const [devCode, setDevCode] = useState(''); // Development mode үшін
 
-  const { login, register } = useAuth();
+  const { loginWithToken } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const from = location.state?.from?.pathname || '/';
 
-  const handleSubmit = async (e) => {
+  // Timer countdown
+  useEffect(() => {
+    if (timer > 0) {
+      const interval = setInterval(() => {
+        setTimer(prev => prev - 1);
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [timer]);
+
+  // Identifier типін автоматты анықтау
+  useEffect(() => {
+    const isEmail = /^\S+@\S+\.\S+$/.test(identifier);
+    const isPhone = /^[\d\+\-\(\)\s]+$/.test(identifier);
+
+    if (isEmail) {
+      setIdentifierType('email');
+    } else if (isPhone) {
+      setIdentifierType('phone');
+    }
+  }, [identifier]);
+
+  // Код жіберу
+  const handleSendCode = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      let result;
+      const res = await axios.post('/api/auth/send-otp', {
+        identifier: identifier.trim()
+      });
 
-      if (isLogin) {
-        result = await login(formData.email, formData.password, isAdminLogin);
-      } else {
-        if (formData.password.length < 6) {
-          setError('Құпия сөз кем дегенде 6 символ болуы керек');
-          setLoading(false);
-          return;
+      if (res.data.success) {
+        setStep('verify');
+        setTimer(600); // 10 минут = 600 секунд
+
+        // Development mode-та кодты көрсету
+        if (res.data.devMode && res.data.code) {
+          setDevCode(res.data.code);
+          console.log('🔑 Dev Code:', res.data.code);
         }
-        result = await register(formData.fullName, formData.email, formData.password);
       }
-
-      if (result.success) {
-        navigate(from, { replace: true });
-      } else {
-        setError(result.message);
-      }
-    } catch (error) {
-      setError('Қате орын алды');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Код жіберу қатесі');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+  // Кодты тексеру
+  const handleVerifyCode = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    const codeString = code.join('');
+
+    if (codeString.length !== 6) {
+      setError('6 санды кодты толық енгізіңіз');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const res = await axios.post('/api/auth/verify-otp', {
+        identifier: identifier.trim(),
+        code: codeString,
+        fullName: fullName.trim()
+      });
+
+      if (res.data.success) {
+        // Token арқылы кіру
+        loginWithToken(res.data.data.token, res.data.data);
+        navigate(from, { replace: true });
+      }
+    } catch (err) {
+      const errorData = err.response?.data;
+
+      // Жаңа пайдаланушы - аты-жөнін сұрау
+      if (errorData?.requiresFullName) {
+        setShowFullNameInput(true);
+        setError(errorData.message);
+      } else {
+        setError(errorData?.message || 'Код тексеру қатесі');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Код input өзгергенде
+  const handleCodeChange = (index, value) => {
+    if (!/^\d*$/.test(value)) return; // Тек сандар
+
+    const newCode = [...code];
+    newCode[index] = value;
+    setCode(newCode);
+
+    // Автоматты фокус келесі input-қа
+    if (value && index < 5) {
+      const nextInput = document.getElementById(`code-${index + 1}`);
+      nextInput?.focus();
+    }
+  };
+
+  // Backspace басқанда
+  const handleKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !code[index] && index > 0) {
+      const prevInput = document.getElementById(`code-${index - 1}`);
+      prevInput?.focus();
+    }
+  };
+
+  // Қайта жіберу
+  const handleResend = () => {
+    setCode(['', '', '', '', '', '']);
+    setError('');
+    setDevCode('');
+    handleSendCode({ preventDefault: () => {} });
+  };
+
+  // Timer форматы
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Артқа қайту
+  const handleBack = () => {
+    setStep('input');
+    setCode(['', '', '', '', '', '']);
+    setError('');
+    setShowFullNameInput(false);
+    setFullName('');
+    setDevCode('');
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen flex items-center justify-center px-4 py-12 bg-gradient-to-br from-primary-50 via-white to-secondary-50">
       <div className="max-w-md w-full">
         {/* Logo */}
         <div className="text-center mb-8 animate-fade-in">
           <div className="inline-block bg-gradient-to-r from-primary-500 to-secondary-500 p-4 rounded-2xl mb-4 shadow-2xl">
-            {isAdminLogin ? (
-              <Shield className="h-12 w-12 text-white" />
-            ) : (
-              <User className="h-12 w-12 text-white" />
-            )}
+            <User className="h-12 w-12 text-white" />
           </div>
           <h2 className="text-4xl font-bold mb-2">
             <span className="gradient-text">
-              {isLogin ? 'Қош келдіңіз!' : 'Тіркелу'}
+              {step === 'input' ? 'Қош келдіңіз!' : 'Кодты енгізіңіз'}
             </span>
           </h2>
           <p className="text-gray-600">
-            {isLogin ? 'Аккаунтыңызға кіріңіз' : 'Жаңа аккаунт жасаңыз'}
+            {step === 'input'
+              ? 'Email немесе телефон нөміріңізді енгізіңіз'
+              : `Код жіберілді: ${identifierType === 'email' ? 'Email' : 'Телефон'}`
+            }
           </p>
-        </div>
-
-        {/* Tabs */}
-        <div className="glass-card p-2 mb-6 flex gap-2">
-          <button
-            onClick={() => {
-              setIsLogin(true);
-              setError('');
-            }}
-            className={`flex-1 py-3 rounded-lg font-medium transition-all ${
-              isLogin
-                ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg'
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
-          >
-            Кіру
-          </button>
-          <button
-            onClick={() => {
-              setIsLogin(false);
-              setIsAdminLogin(false);
-              setError('');
-            }}
-            className={`flex-1 py-3 rounded-lg font-medium transition-all ${
-              !isLogin
-                ? 'bg-gradient-to-r from-secondary-500 to-secondary-600 text-white shadow-lg'
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
-          >
-            Тіркелу
-          </button>
         </div>
 
         {/* Form */}
         <div className="glass-card p-8 animate-slide-up">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Full Name - тек тіркелу кезінде */}
-            {!isLogin && (
+          {step === 'input' ? (
+            // ===== ҚАДАМ 1: Email/Phone енгізу =====
+            <form onSubmit={handleSendCode} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Аты-жөні
+                  Email немесе Телефон нөмірі
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <User className="h-5 w-5 text-gray-400" />
+                    {identifierType === 'email' ? (
+                      <Mail className="h-5 w-5 text-gray-400" />
+                    ) : (
+                      <Phone className="h-5 w-5 text-gray-400" />
+                    )}
                   </div>
                   <input
                     type="text"
-                    name="fullName"
-                    value={formData.fullName}
-                    onChange={handleChange}
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
                     required
                     className="input-field pl-10"
-                    placeholder="Толық аты-жөніңіз"
+                    placeholder="email@example.com немесе +7 700 123 4567"
+                    autoFocus
                   />
                 </div>
-              </div>
-            )}
-
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                  className="input-field pl-10"
-                  placeholder="email@example.com"
-                />
-              </div>
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Құпия сөз
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleChange}
-                  required
-                  className="input-field pl-10"
-                  placeholder="••••••••"
-                />
-              </div>
-              {!isLogin && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Кем дегенде 6 символ
+                <p className="text-xs text-gray-500 mt-2">
+                  Сізге 6 санды код жіберіледі
                 </p>
-              )}
-            </div>
+              </div>
 
-            {/* Admin checkbox - тек кіру кезінде */}
-            {isLogin && (
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  id="adminLogin"
-                  checked={isAdminLogin}
-                  onChange={(e) => setIsAdminLogin(e.target.checked)}
-                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                />
-                <label htmlFor="adminLogin" className="ml-2 block text-sm text-gray-700">
-                  Админ ретінде кіру
+              {error && (
+                <div className="p-4 bg-red-100 text-red-700 rounded-lg text-sm animate-fade-in">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || !identifier.trim()}
+                className="w-full btn-primary flex items-center justify-center space-x-2 disabled:opacity-50"
+              >
+                {loading ? (
+                  <div className="spinner border-white" style={{ width: '20px', height: '20px' }} />
+                ) : (
+                  <>
+                    <Mail className="h-5 w-5" />
+                    <span>Код жіберу</span>
+                  </>
+                )}
+              </button>
+            </form>
+          ) : (
+            // ===== ҚАДАМ 2: Код енгізу =====
+            <form onSubmit={handleVerifyCode} className="space-y-6">
+              {/* Артқа қайту */}
+              <button
+                type="button"
+                onClick={handleBack}
+                className="flex items-center space-x-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                <span>Артқа</span>
+              </button>
+
+              {/* Identifier көрсету */}
+              <div className="text-center py-3 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">Код жіберілді:</p>
+                <p className="text-lg font-semibold text-gray-800">{identifier}</p>
+              </div>
+
+              {/* Timer */}
+              {timer > 0 && (
+                <div className="text-center">
+                  <p className="text-sm text-gray-600">
+                    Код {formatTime(timer)} ішінде жарамды
+                  </p>
+                </div>
+              )}
+
+              {/* Development mode - код көрсету */}
+              {devCode && (
+                <div className="p-4 bg-yellow-50 border-2 border-yellow-300 rounded-lg">
+                  <p className="text-xs text-yellow-700 font-medium">🔧 DEV MODE</p>
+                  <p className="text-2xl font-bold text-yellow-900 text-center tracking-wider">
+                    {devCode}
+                  </p>
+                </div>
+              )}
+
+              {/* Код енгізу (6 input) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3 text-center">
+                  6 санды кодты енгізіңіз
                 </label>
+                <div className="flex justify-center space-x-2">
+                  {code.map((digit, index) => (
+                    <input
+                      key={index}
+                      id={`code-${index}`}
+                      type="text"
+                      maxLength={1}
+                      value={digit}
+                      onChange={(e) => handleCodeChange(index, e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(index, e)}
+                      className="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-lg focus:border-primary-500 focus:ring-2 focus:ring-primary-200 transition-all"
+                      autoFocus={index === 0}
+                    />
+                  ))}
+                </div>
               </div>
-            )}
 
-            {/* Error Message */}
-            {error && (
-              <div className="p-4 bg-red-100 text-red-700 rounded-lg text-sm animate-fade-in">
-                {error}
-              </div>
-            )}
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full btn-primary flex items-center justify-center space-x-2 disabled:opacity-50"
-            >
-              {loading ? (
-                <div className="spinner border-white" style={{ width: '20px', height: '20px' }} />
-              ) : (
-                <>
-                  {isLogin ? (
-                    <LogIn className="h-5 w-5" />
-                  ) : (
-                    <UserPlus className="h-5 w-5" />
-                  )}
-                  <span>{isLogin ? 'Кіру' : 'Тіркелу'}</span>
-                </>
+              {/* Аты-жөнін сұрау (жаңа user үшін) */}
+              {showFullNameInput && (
+                <div className="animate-fade-in">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Аты-жөніңіз (жаңа аккаунт үшін)
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <User className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      required={showFullNameInput}
+                      className="input-field pl-10"
+                      placeholder="Толық аты-жөніңіз"
+                    />
+                  </div>
+                </div>
               )}
-            </button>
-          </form>
 
-          {/* Footer */}
-          <div className="mt-6 text-center text-sm text-gray-600">
-            {isLogin ? (
-              <p>
-                Аккаунт жоқ па?{' '}
+              {error && (
+                <div className="p-4 bg-red-100 text-red-700 rounded-lg text-sm animate-fade-in">
+                  {error}
+                </div>
+              )}
+
+              {/* Тексеру батырмасы */}
+              <button
+                type="submit"
+                disabled={loading || code.some(d => !d)}
+                className="w-full btn-primary flex items-center justify-center space-x-2 disabled:opacity-50"
+              >
+                {loading ? (
+                  <div className="spinner border-white" style={{ width: '20px', height: '20px' }} />
+                ) : (
+                  <>
+                    <Check className="h-5 w-5" />
+                    <span>Кіру</span>
+                  </>
+                )}
+              </button>
+
+              {/* Қайта жіберу */}
+              {timer === 0 && (
                 <button
-                  onClick={() => {
-                    setIsLogin(false);
-                    setIsAdminLogin(false);
-                  }}
-                  className="text-primary-600 font-medium hover:underline"
+                  type="button"
+                  onClick={handleResend}
+                  className="w-full text-center text-primary-600 font-medium hover:underline"
                 >
-                  Тіркелу
+                  Қайта жіберу
                 </button>
-              </p>
-            ) : (
-              <p>
-                Аккаунт бар ма?{' '}
-                <button
-                  onClick={() => setIsLogin(true)}
-                  className="text-primary-600 font-medium hover:underline"
-                >
-                  Кіру
-                </button>
-              </p>
-            )}
-          </div>
+              )}
+            </form>
+          )}
         </div>
 
         {/* Info */}
         <div className="mt-6 text-center text-xs text-gray-500">
-          <p>Тіркелу арқылы сіз біздің шарттармен келісесіз</p>
+          <p>Кіру арқылы сіз біздің шарттармен келісесіз</p>
         </div>
       </div>
     </div>

@@ -130,12 +130,21 @@ export const AuthProvider = ({ children }) => {
     delete axios.defaults.headers.common['Authorization'];
   };
 
+  // Token арқылы кіру (OTP үшін)
+  const loginWithToken = (newToken, userData) => {
+    localStorage.setItem('token', newToken);
+    setToken(newToken);
+    setUser(userData);
+    axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+  };
+
   const value = {
     user,
     loading,
     register,
     login,
     logout,
+    loginWithToken, // OTP үшін
     updateProfile,
     saveApiKeys,
     isAuthenticated: !!user,
