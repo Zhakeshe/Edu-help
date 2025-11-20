@@ -242,7 +242,7 @@ const Auth = () => {
 
               {/* Identifier көрсету */}
               <div className="text-center py-3 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">Код жіберілді:</p>
+                <p className="text-sm text-gray-600">Код жіберілді(Келмесе Спам почта тексеріңіз):</p>
                 <p className="text-lg font-semibold text-gray-800">{identifier}</p>
               </div>
 
