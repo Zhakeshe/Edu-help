@@ -267,26 +267,19 @@ router.post('/verify-otp', async (req, res) => {
       user = existingUser;
 
       try {
-        // stats объектісін тексеру
-        if (!user.stats) {
-          user.stats = {
-            materialsDownloaded: 0,
-            aiToolsUsed: 0,
-            lastActive: Date.now()
-          };
-        } else {
-          user.stats.lastActive = Date.now();
-        }
-
-        // Тек stats өрісін өзгерту ретінде белгілеу
-        user.markModified('stats');
-
-        await user.save();
-        console.log('✅ User сақталды');
-      } catch (saveError) {
-        console.error('❌ User.save() қатесі:', saveError.message);
-        console.error('User деректері:', JSON.stringify(user.toObject(), null, 2));
-        throw saveError;
+        // stats өрісін тікелей жаңарту (save() middleware-ін өткізіп жіберу үшін)
+        await User.findByIdAndUpdate(
+          user._id,
+          {
+            'stats.lastActive': Date.now()
+          },
+          { new: false } // Жаңартылған құжатты қайтармайды
+        );
+        console.log('✅ User stats жаңартылды');
+      } catch (updateError) {
+        console.error('❌ User.findByIdAndUpdate() қатесі:', updateError.message);
+        // Қате болса да жалғастыру - stats жаңарту маңызды емес
+        console.log('⚠️ Stats жаңарту қатесі өткізілді');
       }
 
       isAdmin = user.role === 'admin';
@@ -294,18 +287,37 @@ router.post('/verify-otp', async (req, res) => {
     } else if (existingAdmin) {
       // ========== БАР АДМИН (ескі Admin моделінен) - КІРУ ==========
       console.log('📌 Ескі админ табылды, миграциялау...');
-      // Admin моделінен User моделіне көшіреміз
-      try {
-        user = await User.create({
-          fullName: existingAdmin.username,
-          email: existingAdmin.email,
-          authMethod: 'otp',
-          role: 'admin'
-        });
-        console.log('✅ Админ миграцияланды');
-      } catch (createError) {
-        console.error('❌ Админ миграция қатесі:', createError.message);
-        throw createError;
+
+      // Тағы бір рет User моделінен тексеру (race condition-нан қорғау)
+      const doubleCheckUser = await User.findOne({ email: identifier.toLowerCase() });
+      if (doubleCheckUser) {
+        console.log('✅ User қазірдің өзінде бар екен, оны пайдаланамыз');
+        user = doubleCheckUser;
+      } else {
+        // Admin моделінен User моделіне көшіреміз
+        try {
+          user = await User.create({
+            fullName: existingAdmin.username || 'Админ',
+            email: existingAdmin.email,
+            authMethod: 'otp',
+            role: 'admin'
+          });
+          console.log('✅ Админ миграцияланды');
+        } catch (createError) {
+          console.error('❌ Админ миграция қатесі:', createError.message);
+
+          // Егер duplicate key қатесі болса, қайта іздейміз
+          if (createError.code === 11000) {
+            console.log('⚠️ Duplicate key, User-ді қайта іздеуде...');
+            user = await User.findOne({ email: identifier.toLowerCase() });
+            if (!user) {
+              throw new Error('User жасау мүмкін болмады және табылмады');
+            }
+            console.log('✅ User табылды');
+          } else {
+            throw createError;
+          }
+        }
       }
       isAdmin = true;
 
@@ -331,7 +343,18 @@ router.post('/verify-otp', async (req, res) => {
         console.log('✅ Жаңа пайдаланушы тіркелді');
       } catch (createError) {
         console.error('❌ User.create() қатесі:', createError.message);
-        throw createError;
+
+        // Егер duplicate key қатесі болса, бар пайдаланушыны пайдаланамыз
+        if (createError.code === 11000) {
+          console.log('⚠️ Duplicate key, User бар екен, оны іздеуде...');
+          user = await User.findOne({ email: identifier.toLowerCase() });
+          if (!user) {
+            throw new Error('User жасау мүмкін болмады және табылмады');
+          }
+          console.log('✅ Бар User табылды');
+        } else {
+          throw createError;
+        }
       }
     }
 

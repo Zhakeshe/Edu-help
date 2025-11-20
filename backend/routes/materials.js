@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs').promises;
+const fsSync = require('fs');
 const Material = require('../models/Material');
 const { protect, adminOnly } = require('../middleware/auth');
 
@@ -32,7 +34,7 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
-  limits: { fileSize: 100 * 1024 * 1024 } // 100MB
+  limits: { fileSize: 500 * 1024 * 1024 } // 500MB - үлкен презентация/видео файлдар үшін
 });
 
 // @route   POST /api/upload
@@ -138,9 +140,26 @@ router.get('/preview/:id', async (req, res) => {
       });
     }
 
-    // MIME type анықтау
-    const fs = require('fs');
+    // Файл жолын тексеру
+    if (!material.filePath) {
+      return res.status(404).json({
+        success: false,
+        message: 'Файл жолы табылмады'
+      });
+    }
+
+    // Файлдың дискіде бар-жоғын тексеру
+    if (!fsSync.existsSync(material.filePath)) {
+      console.error(`Файл табылмады: ${material.filePath}`);
+      return res.status(404).json({
+        success: false,
+        message: 'Файл серверде табылмады. Әкімшіге хабарласыңыз.'
+      });
+    }
+
+    // MIME type анықтау - барлық танымал форматтар
     const mimeTypes = {
+      // Суреттер
       'pdf': 'application/pdf',
       'jpg': 'image/jpeg',
       'jpeg': 'image/jpeg',
@@ -148,15 +167,48 @@ router.get('/preview/:id', async (req, res) => {
       'gif': 'image/gif',
       'webp': 'image/webp',
       'svg': 'image/svg+xml',
+      'bmp': 'image/bmp',
+      'ico': 'image/x-icon',
+
+      // Видео
       'mp4': 'video/mp4',
       'webm': 'video/webm',
+      'avi': 'video/x-msvideo',
+      'mov': 'video/quicktime',
+      'mkv': 'video/x-matroska',
+      'flv': 'video/x-flv',
+
+      // Аудио
       'mp3': 'audio/mpeg',
       'wav': 'audio/wav',
       'ogg': 'audio/ogg',
+      'aac': 'audio/aac',
+      'm4a': 'audio/mp4',
+
+      // Мәтіндік файлдар
       'txt': 'text/plain',
       'html': 'text/html',
+      'htm': 'text/html',
       'css': 'text/css',
-      'js': 'application/javascript'
+      'js': 'application/javascript',
+      'json': 'application/json',
+      'xml': 'application/xml',
+      'csv': 'text/csv',
+
+      // Office құжаттары (браузерде ашылмайды, жүктеп алу керек)
+      'doc': 'application/msword',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls': 'application/vnd.ms-excel',
+      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'ppt': 'application/vnd.ms-powerpoint',
+      'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+
+      // Архивтер
+      'zip': 'application/zip',
+      'rar': 'application/x-rar-compressed',
+      '7z': 'application/x-7z-compressed',
+      'tar': 'application/x-tar',
+      'gz': 'application/gzip'
     };
 
     const contentType = mimeTypes[material.fileType] || 'application/octet-stream';
@@ -164,13 +216,30 @@ router.get('/preview/:id', async (req, res) => {
     // Файлды оқу және жіберу
     res.setHeader('Content-Type', contentType);
     res.setHeader('Content-Disposition', 'inline'); // Браузерде ашу
-    fs.createReadStream(material.filePath).pipe(res);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Файлды көрсету қатесі',
-      error: error.message
+
+    const stream = fsSync.createReadStream(material.filePath);
+
+    stream.on('error', (err) => {
+      console.error('Файл оқу қатесі:', err);
+      if (!res.headersSent) {
+        return res.status(500).json({
+          success: false,
+          message: 'Файлды оқу кезінде қате пайда болды',
+          error: err.message
+        });
+      }
     });
+
+    stream.pipe(res);
+  } catch (error) {
+    console.error('Preview endpoint қатесі:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Файлды көрсету қатесі',
+        error: error.message
+      });
+    }
   }
 });
 
@@ -188,17 +257,50 @@ router.get('/download/:id', async (req, res) => {
       });
     }
 
+    // Файл жолын тексеру
+    if (!material.filePath) {
+      return res.status(404).json({
+        success: false,
+        message: 'Файл жолы табылмады'
+      });
+    }
+
+    // Файлдың дискіде бар-жоғын тексеру
+    if (!fsSync.existsSync(material.filePath)) {
+      console.error(`Файл табылмады: ${material.filePath}`);
+      return res.status(404).json({
+        success: false,
+        message: 'Файл серверде табылмады. Әкімшіге хабарласыңыз.'
+      });
+    }
+
     // Жүктеу санағышын көбейту
     material.downloads += 1;
     await material.save();
 
-    res.download(material.filePath, material.fileName);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Файлды жүктеу қатесі',
-      error: error.message
+    // Файлды жүктеу
+    res.download(material.filePath, material.fileName, (err) => {
+      if (err) {
+        console.error('Файл жүктеу қатесі:', err);
+        // Егер headers жіберілмесе ғана қате жіберу
+        if (!res.headersSent) {
+          return res.status(500).json({
+            success: false,
+            message: 'Файлды жүктеу кезінде қате пайда болды',
+            error: err.message
+          });
+        }
+      }
     });
+  } catch (error) {
+    console.error('Download endpoint қатесі:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Файлды жүктеу қатесі',
+        error: error.message
+      });
+    }
   }
 });
 

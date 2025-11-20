@@ -17,6 +17,8 @@ const MaterialUpload = () => {
   const [materials, setMaterials] = useState([]);
   const [editMaterial, setEditMaterial] = useState(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
 
   useEffect(() => {
     fetchMaterials();
@@ -134,7 +136,24 @@ const MaterialUpload = () => {
 
   const handleFileChange = (e) => {
     const selectedFiles = Array.from(e.target.files);
-    setFiles(selectedFiles);
+
+    // Файл өлшемін тексеру (500MB = 500 * 1024 * 1024 bytes)
+    const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+    const oversizedFiles = selectedFiles.filter(file => file.size > MAX_FILE_SIZE);
+
+    if (oversizedFiles.length > 0) {
+      const fileNames = oversizedFiles.map(f => `${f.name} (${formatFileSize(f.size)})`).join(', ');
+      setStatus({
+        type: 'error',
+        message: `Кейбір файлдар тым үлкен (макс. 500MB): ${fileNames}`
+      });
+      // Тым үлкен файлдарды алып тастау
+      const validFiles = selectedFiles.filter(file => file.size <= MAX_FILE_SIZE);
+      setFiles(validFiles);
+    } else {
+      setFiles(selectedFiles);
+      setStatus({ type: '', message: '' });
+    }
   };
 
   const removeFile = (index) => {
@@ -147,6 +166,20 @@ const MaterialUpload = () => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  // Pagination логикасы
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentMaterials = materials.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(materials.length / itemsPerPage);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+  const nextPage = () => {
+    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+  };
+  const prevPage = () => {
+    if (currentPage > 1) setCurrentPage(currentPage - 1);
   };
 
   return (
@@ -263,7 +296,7 @@ const MaterialUpload = () => {
                 Кез келген файл жүктеуге болады (PDF, DOCX, PPTX, TXT, PNG, JPG, MP3, MP4, ZIP, т.б.)
               </p>
               <p className="text-xs text-gray-500 mt-1">
-                📦 Бірнеше файл бірден таңдап жүктей аласыз (макс. 20 файл, әр файл макс. 100MB)
+                📦 Бірнеше файл бірден таңдап жүктей аласыз (макс. 20 файл, әр файл макс. 500MB)
               </p>
               <p className="text-xs text-red-500 mt-1">
                 ⚠️ Қауіпті файлдар (.exe, .bat, .sh) рұқсат етілмейді
@@ -387,7 +420,7 @@ const MaterialUpload = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {materials.slice(0, 10).map((material) => (
+              {currentMaterials.map((material) => (
                 <tr key={material._id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm">{material.title}</td>
                   <td className="px-4 py-3 text-sm">
@@ -421,6 +454,49 @@ const MaterialUpload = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {materials.length > itemsPerPage && (
+          <div className="mt-6 flex items-center justify-between px-4">
+            <div className="text-sm text-gray-700">
+              {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, materials.length)} / {materials.length} материал көрсетілуде
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={prevPage}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              >
+                Артқа
+              </button>
+
+              <div className="flex space-x-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => paginate(page)}
+                    className={`px-3 py-1 border rounded-md text-sm ${
+                      currentPage === page
+                        ? 'bg-primary-500 text-white border-primary-500'
+                        : 'border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={nextPage}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-300 rounded-md text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+              >
+                Алға
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Edit Modal */}
