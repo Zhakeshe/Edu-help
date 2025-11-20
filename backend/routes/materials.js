@@ -157,8 +157,9 @@ router.get('/preview/:id', async (req, res) => {
       });
     }
 
-    // MIME type анықтау
+    // MIME type анықтау - барлық танымал форматтар
     const mimeTypes = {
+      // Суреттер
       'pdf': 'application/pdf',
       'jpg': 'image/jpeg',
       'jpeg': 'image/jpeg',
@@ -166,15 +167,48 @@ router.get('/preview/:id', async (req, res) => {
       'gif': 'image/gif',
       'webp': 'image/webp',
       'svg': 'image/svg+xml',
+      'bmp': 'image/bmp',
+      'ico': 'image/x-icon',
+
+      // Видео
       'mp4': 'video/mp4',
       'webm': 'video/webm',
+      'avi': 'video/x-msvideo',
+      'mov': 'video/quicktime',
+      'mkv': 'video/x-matroska',
+      'flv': 'video/x-flv',
+
+      // Аудио
       'mp3': 'audio/mpeg',
       'wav': 'audio/wav',
       'ogg': 'audio/ogg',
+      'aac': 'audio/aac',
+      'm4a': 'audio/mp4',
+
+      // Мәтіндік файлдар
       'txt': 'text/plain',
       'html': 'text/html',
+      'htm': 'text/html',
       'css': 'text/css',
-      'js': 'application/javascript'
+      'js': 'application/javascript',
+      'json': 'application/json',
+      'xml': 'application/xml',
+      'csv': 'text/csv',
+
+      // Office құжаттары (браузерде ашылмайды, жүктеп алу керек)
+      'doc': 'application/msword',
+      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'xls': 'application/vnd.ms-excel',
+      'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'ppt': 'application/vnd.ms-powerpoint',
+      'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+
+      // Архивтер
+      'zip': 'application/zip',
+      'rar': 'application/x-rar-compressed',
+      '7z': 'application/x-7z-compressed',
+      'tar': 'application/x-tar',
+      'gz': 'application/gzip'
     };
 
     const contentType = mimeTypes[material.fileType] || 'application/octet-stream';
