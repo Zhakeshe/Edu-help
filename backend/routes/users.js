@@ -5,6 +5,11 @@ const User = require('../models/User');
 const Admin = require('../models/Admin');
 const { protect } = require('../middleware/auth');
 
+const setDeprecatedHeaders = (res, hint) => {
+  res.set('X-API-Deprecated', 'true');
+  res.set('X-API-Deprecated-Message', hint || 'Password auth is deprecated. Use OTP flow.');
+};
+
 // JWT token генерациялау
 const generateToken = (id, role) => {
   return jwt.sign({ id, role }, process.env.JWT_SECRET, {
@@ -17,6 +22,8 @@ const generateToken = (id, role) => {
 // @access  Public
 router.post('/register', async (req, res) => {
   try {
+    setDeprecatedHeaders(res, 'Password register is deprecated. Use /api/auth/send-otp + verify-otp.');
+
     const { fullName, email, password } = req.body;
 
     // Пайдаланушы бар ма тексеру
@@ -61,6 +68,8 @@ router.post('/register', async (req, res) => {
 // @access  Public
 router.post('/login', async (req, res) => {
   try {
+    setDeprecatedHeaders(res, 'Password login is deprecated. Use /api/auth/send-otp + verify-otp.');
+
     const { email, password, isAdmin } = req.body;
 
     let user;

@@ -1,228 +1,100 @@
-# 🚀 EduHelp - Vercel/Railway Deploy нұсқаулығы
+# EduHelp Deploy Guide
 
-## 🎯 Ұсынылатын стратегия: Frontend Vercel + Backend Railway
+## Target Topology
+- Frontend: Vercel
+- Backend: Railway (or any Node host)
+- Database: MongoDB Atlas
+- Object storage: Cloudflare R2
 
-### ✅ Артықшылықтары:
-- ⚡ Жылдам орнату
-- 💰 Тегін тарифтер
-- 🔧 Оңай конфигурация
-- 📊 Автоматты масштабтау
-
----
-
-## 🌐 БӨЛІМ 1: Frontend - Vercel-ге deploy
-
-### 1️⃣ Vercel аккаунтын жасау
-1. https://vercel.com қосылыңыз
-2. GitHub аккаунтымен кіріңіз
-3. Repository-ді импорттаңыз
-
-### 2️⃣ Vercel конфигурациясы
-
-**Root Directory:** `frontend`
-
-**Build Command:**
-```bash
-npm run build
-```
-
-**Output Directory:**
-```
-dist
-```
-
-**Install Command:**
-```bash
-npm install
-```
-
-### 3️⃣ Environment Variables (Vercel)
-
+## Backend Environment Variables
+Required:
 ```env
-VITE_API_URL=https://your-backend-url.up.railway.app
-```
-
-### 4️⃣ Deploy
-- GitHub-қа push жасасаңыз - автоматты deploy болады
-- Domain: `eduhelp.vercel.app`
-
----
-
-## 🚂 БӨЛІМ 2: Backend - Railway-ге deploy
-
-### 1️⃣ Railway аккаунтын жасау
-1. https://railway.app қосылыңыз
-2. GitHub аккаунтымен кіріңіз
-
-### 2️⃣ MongoDB қосу
-
-1. Railway Dashboard-та **"New"** → **"Database"** → **"MongoDB"**
-2. Connection String алыңыз
-
-### 3️⃣ Backend сервисін қосу
-
-1. **"New"** → **"GitHub Repo"** → `Edu-help` таңдаңыз
-2. **Root Directory:** `backend` орнатыңыз
-
-### 4️⃣ Environment Variables (Railway)
-
-Railway Dashboard → Variables бөлімінде:
-
-```env
-MONGODB_URI=mongodb://...  (Railway MongoDB-тан көшіріңіз)
-JWT_SECRET=your_super_secret_key_here_min_32_chars
-PORT=5000
+MONGODB_URI=
+JWT_SECRET=
 NODE_ENV=production
-FRONTEND_URL=https://eduhelp.vercel.app
+PORT=5000
 
-# AI API Keys (опциялық)
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-GOOGLE_AI_API_KEY=...
+# Comma-separated CORS allowlist
+FRONTEND_URL=https://eduhelp.example.com,https://www.eduhelp.example.com
+
+# Gemini
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.0-flash
+
+# Image generation
+HUGGINGFACE_API_KEY=
+
+# Security
+API_RATE_LIMIT_MAX=400
 ```
 
-### 5️⃣ Deploy Settings
-
-**Start Command:**
-```bash
-npm start
-```
-
-**Build Command:**
-```bash
-npm install
-```
-
-### 6️⃣ Deploy
-- Deploy басыңыз
-- Domain алыңыз: `eduhelp-backend.up.railway.app`
-
----
-
-## 🔗 БӨЛІМ 3: Қосымдарды байланыстыру
-
-### 1️⃣ Vercel-де API URL жаңарту
-
-Frontend Vercel Settings → Environment Variables:
-
+OTP config:
 ```env
-VITE_API_URL=https://eduhelp-backend.up.railway.app
+OTP_MAX_ATTEMPTS=5
+OTP_SEND_COOLDOWN_MS=60000
+OTP_VERIFY_LOCK_MS=600000
+OTP_TTL_MS=600000
+OTP_DEBUG=false
 ```
 
-### 2️⃣ Railway-де CORS жаңарту
-
-Backend Railway Environment Variables:
-
+Cloudflare R2:
 ```env
-FRONTEND_URL=https://eduhelp.vercel.app
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET=
+R2_PUBLIC_BASE_URL=
 ```
 
-### 3️⃣ Frontend кодын жаңарту
-
-`frontend/src/context/AuthContext.jsx` және басқа файлдарда:
-
-```javascript
-// Бұрынғы:
-axios.get('/api/auth/me');
-
-// Жаңа (production үшін):
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-axios.get(`${API_URL}/api/auth/me`);
+Optional flags:
+```env
+ALLOW_LOCAL_STORAGE_FALLBACK=false
+ENABLE_BUNDLE_GENERATOR=true
+ENABLE_LEGACY_AI_TEXT_ROUTE=true
 ```
 
----
+## Frontend Environment Variables
+```env
+VITE_API_URL=https://api.eduhelp.example.com
+```
 
-## 🎯 БӨЛІМ 4: Алғашқы админ тіркеу
-
-Deploy аяқталғаннан кейін:
-
+## Migration Runbook
+1. Pre-release checks:
+   - Confirm R2 bucket and credentials.
+   - Confirm new env vars are set.
+2. Dry-run migrations:
 ```bash
-curl -X POST https://eduhelp-backend.up.railway.app/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin",
-    "email": "admin@eduhelp.kz",
-    "password": "YourSecurePassword123!"
-  }'
+cd backend
+npm run migrate:admin-users
+npm run migrate:materials-files
 ```
-
----
-
-## 🌟 ҚОСЫМША: Vercel Монорепо (Альтернатива)
-
-Егер бір Vercel проектінде deploy жасағыңыз келсе:
-
-### vercel.json конфигурациясы
-
-```json
-{
-  "buildCommand": "cd frontend && npm install && npm run build",
-  "outputDirectory": "frontend/dist",
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://eduhelp-backend.up.railway.app/api/:path*"
-    }
-  ]
-}
+3. Take DB backup.
+4. Apply migrations:
+```bash
+npm run migrate:admin-users -- --apply
+npm run migrate:materials-files -- --apply
 ```
+5. Verify:
+   - Admin users exist in `User` model with `role=admin`.
+   - Materials include `files[]` metadata.
 
----
+## Deploy Order
+1. Deploy backend (dual-read legacy mode already included).
+2. Run migrations.
+3. Deploy frontend.
+4. Monitor deprecation headers and fallback ratio.
 
-## ✅ Deployment чеклист:
+## Post-Deploy Smoke Checklist (24h)
+- OTP send/verify works.
+- `/admin` is accessible only for admin role.
+- Normal user gets `403` on feedback admin endpoints.
+- Material upload writes to R2.
+- Material preview/download works for new + legacy files.
+- `POST /api/ai/generate-bundle` returns valid URLs.
+- Deprecated route `/api/ai-tools/generate/text` still responds and sets deprecation headers.
 
-- [ ] GitHub репозиторий дайын
-- [ ] Railway аккаунт жасалды
-- [ ] MongoDB Railway-де орнатылды
-- [ ] Backend Railway-ге deploy жасалды
-- [ ] Backend Environment Variables орнатылды
-- [ ] Vercel аккаунт жасалды
-- [ ] Frontend Vercel-ге deploy жасалды
-- [ ] Frontend Environment Variables орнатылды (VITE_API_URL)
-- [ ] CORS конфигурациясы дұрыс
-- [ ] Алғашқы админ тіркелді
-- [ ] Сайт жұмыс істейді! 🎉
+## Rollback Strategy
+- Disable bundle feature: `ENABLE_BUNDLE_GENERATOR=false`.
+- Disable deprecated proxy route: `ENABLE_LEGACY_AI_TEXT_ROUTE=false`.
+- Keep legacy local read path enabled for historical files.
 
----
-
-## 🔧 Қателерді жою
-
-### CORS қатесі:
-```
-Access to XMLHttpRequest blocked by CORS policy
-```
-
-**Шешім:** Railway-дегі `FRONTEND_URL` environment variable-ды тексеріңіз
-
-### MongoDB қосылмайды:
-```
-MongoServerError: Authentication failed
-```
-
-**Шешім:** Railway MongoDB connection string-ті дұрыс көшіргеніңізді тексеріңіз
-
-### 404 қатесі API-да:
-```
-Cannot GET /api/classes
-```
-
-**Шешім:** `VITE_API_URL` дұрыс орнатылғанын тексеріңіз
-
----
-
-## 📞 Көмек
-
-- Railway документациясы: https://docs.railway.app
-- Vercel документациясы: https://vercel.com/docs
-- GitHub Issues: [Сіздің репозиторий]/issues
-
----
-
-## 🎊 Дайын!
-
-Сіздің сайт енді онлайн:
-
-- **Frontend:** https://eduhelp.vercel.app
-- **Backend:** https://eduhelp-backend.up.railway.app
-
-Құттықтаймын! 🎓✨

@@ -1,17 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const axios = require('axios');
 const AITool = require('../models/AITool');
-const { protect } = require('../middleware/auth');
+const { protect, adminOnly } = require('../middleware/auth');
+const { callGemini } = require('../services/ai/geminiService');
+const { getFreeToolsByCategory } = require('../services/ai/freeTools');
 
-// @route   GET /api/ai-tools
-// @desc    Барлық AI құралдарды алу
-// @access  Public
 router.get('/', async (req, res) => {
   try {
     const { category } = req.query;
 
-    let filter = { isActive: true };
+    const filter = { isActive: true };
     if (category) filter.category = category;
 
     const aiTools = await AITool.find(filter).sort({ rating: -1, usageCount: -1 });
@@ -24,15 +22,12 @@ router.get('/', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'AI құралдарды алу қатесі',
+      message: 'AI ?????????? ??? ??????',
       error: error.message
     });
   }
 });
 
-// @route   GET /api/ai-tools/:id
-// @desc    Бір AI құралды алу
-// @access  Public
 router.get('/:id', async (req, res) => {
   try {
     const aiTool = await AITool.findById(req.params.id);
@@ -40,7 +35,7 @@ router.get('/:id', async (req, res) => {
     if (!aiTool) {
       return res.status(404).json({
         success: false,
-        message: 'AI құралы табылмады'
+        message: 'AI ?????? ?????????'
       });
     }
 
@@ -51,16 +46,13 @@ router.get('/:id', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'AI құралды алу қатесі',
+      message: 'AI ??????? ??? ??????',
       error: error.message
     });
   }
 });
 
-// @route   POST /api/ai-tools
-// @desc    Жаңа AI құралды қосу
-// @access  Private
-router.post('/', protect, async (req, res) => {
+router.post('/', protect, adminOnly, async (req, res) => {
   try {
     const aiTool = await AITool.create(req.body);
 
@@ -71,16 +63,13 @@ router.post('/', protect, async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'AI құралды қосу қатесі',
+      message: 'AI ??????? ???? ??????',
       error: error.message
     });
   }
 });
 
-// @route   PUT /api/ai-tools/:id
-// @desc    AI құралды жаңарту
-// @access  Private
-router.put('/:id', protect, async (req, res) => {
+router.put('/:id', protect, adminOnly, async (req, res) => {
   try {
     const aiTool = await AITool.findByIdAndUpdate(
       req.params.id,
@@ -91,7 +80,7 @@ router.put('/:id', protect, async (req, res) => {
     if (!aiTool) {
       return res.status(404).json({
         success: false,
-        message: 'AI құралы табылмады'
+        message: 'AI ?????? ?????????'
       });
     }
 
@@ -102,42 +91,36 @@ router.put('/:id', protect, async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'AI құралды жаңарту қатесі',
+      message: 'AI ??????? ??????? ??????',
       error: error.message
     });
   }
 });
 
-// @route   DELETE /api/ai-tools/:id
-// @desc    AI құралды өшіру
-// @access  Private
-router.delete('/:id', protect, async (req, res) => {
+router.delete('/:id', protect, adminOnly, async (req, res) => {
   try {
     const aiTool = await AITool.findByIdAndDelete(req.params.id);
 
     if (!aiTool) {
       return res.status(404).json({
         success: false,
-        message: 'AI құралы табылмады'
+        message: 'AI ?????? ?????????'
       });
     }
 
     res.json({
       success: true,
-      message: 'AI құралы өшірілді'
+      message: 'AI ?????? ????????'
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'AI құралды өшіру қатесі',
+      message: 'AI ??????? ????? ??????',
       error: error.message
     });
   }
 });
 
-// @route   POST /api/ai-tools/:id/use
-// @desc    AI құралды пайдалану (санағышты көбейту)
-// @access  Public
 router.post('/:id/use', async (req, res) => {
   try {
     const aiTool = await AITool.findById(req.params.id);
@@ -145,7 +128,7 @@ router.post('/:id/use', async (req, res) => {
     if (!aiTool) {
       return res.status(404).json({
         success: false,
-        message: 'AI құралы табылмады'
+        message: 'AI ?????? ?????????'
       });
     }
 
@@ -159,86 +142,55 @@ router.post('/:id/use', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Қате',
+      message: '????',
       error: error.message
     });
   }
 });
 
-// @route   POST /api/ai-tools/generate/text
-// @desc    Мәтін генерациялау (OpenAI/Anthropic/Google)
-// @access  Public
+// Soft-deprecated route: now proxied to Gemini-first
 router.post('/generate/text', async (req, res) => {
+  if (process.env.ENABLE_LEGACY_AI_TEXT_ROUTE === 'false') {
+    return res.status(410).json({
+      success: false,
+      message: 'Legacy text route is disabled',
+      errorCode: 'FEATURE_DISABLED'
+    });
+  }
+
+  res.set('X-API-Deprecated', 'true');
+  res.set('X-API-Deprecated-Message', 'Use /api/ai/chat or /api/ai/generate-bundle');
+
   try {
-    const { prompt, model = 'gpt-3.5-turbo', provider = 'openai' } = req.body;
+    const { prompt } = req.body;
 
     if (!prompt) {
       return res.status(400).json({
         success: false,
-        message: 'Prompt қажет'
+        message: 'Prompt ?????'
       });
     }
 
-    let response;
+    const text = await callGemini(prompt, {
+      temperature: 0.7,
+      maxTokens: 1024
+    });
 
-    if (provider === 'openai' && process.env.OPENAI_API_KEY) {
-      response = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        {
-          model,
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: 500
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      res.json({
-        success: true,
-        data: {
-          text: response.data.choices[0].message.content,
-          provider: 'OpenAI'
-        }
-      });
-    } else if (provider === 'anthropic' && process.env.ANTHROPIC_API_KEY) {
-      response = await axios.post(
-        'https://api.anthropic.com/v1/messages',
-        {
-          model: 'claude-3-sonnet-20240229',
-          max_tokens: 500,
-          messages: [{ role: 'user', content: prompt }]
-        },
-        {
-          headers: {
-            'x-api-key': process.env.ANTHROPIC_API_KEY,
-            'anthropic-version': '2023-06-01',
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      res.json({
-        success: true,
-        data: {
-          text: response.data.content[0].text,
-          provider: 'Anthropic Claude'
-        }
-      });
-    } else {
-      res.status(400).json({
-        success: false,
-        message: 'API кілті қойылмаған немесе provider қолдауы жоқ'
-      });
-    }
+    res.json({
+      success: true,
+      data: {
+        text,
+        provider: 'Gemini'
+      }
+    });
   } catch (error) {
-    res.status(500).json({
+    res.status(503).json({
       success: false,
-      message: 'Мәтін генерациялау қатесі',
-      error: error.message
+      message: error.message || '????? ????????? ??????',
+      errorCode: 'GEMINI_UNAVAILABLE',
+      fallback: {
+        freeTools: getFreeToolsByCategory('text')
+      }
     });
   }
 });

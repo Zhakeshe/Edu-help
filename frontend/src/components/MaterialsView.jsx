@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import { Download, FileText, ArrowLeft, Calendar, Filter, Eye, X } from 'lucide-react';
@@ -21,30 +21,20 @@ const MaterialsView = () => {
       const res = await axios.get(`/api/classes/${classNumber}`);
       setClassData(res.data.data);
     } catch (error) {
-      console.error('Сынып деректерін жүктеу қатесі:', error);
+      console.error('Ð¡Ñ‹Ð½Ñ‹Ð¿ Ð´ÐµÑ€ÐµÐºÑ‚ÐµÑ€Ñ–Ð½ Ð¶Ò¯ÐºÑ‚ÐµÑƒ Ò›Ð°Ñ‚ÐµÑÑ–:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDownload = async (material) => {
-    try {
-      const res = await axios.get(`/api/materials/download/${material._id}`, {
-        responseType: 'blob'
-      });
-
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', material.fileName); // Дұрыс fileName қолдану
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url); // Memory leak-тен сақтау
-    } catch (error) {
-      console.error('Жүктеу қатесі:', error);
-      alert('Файлды жүктеу мүмкін болмады');
-    }
+  const handleDownload = (material) => {
+    const link = document.createElement('a');
+    link.href = `/api/materials/download/${material._id}`;
+    link.target = '_blank';
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
   };
 
   const getFileTypeCategory = (fileType) => {
@@ -61,18 +51,18 @@ const MaterialsView = () => {
   };
 
   const getFileIcon = (fileType) => {
-    if (!fileType) return '📎';
+    if (!fileType) return 'ðŸ“Ž';
     const type = fileType.toUpperCase();
-    if (type === 'PDF') return '📄';
-    if (['DOC', 'DOCX'].includes(type)) return '📝';
-    if (['PPT', 'PPTX'].includes(type)) return '📊';
-    if (['PNG', 'JPG', 'JPEG', 'GIF', 'SVG', 'WEBP'].includes(type)) return '🖼️';
-    if (['TXT', 'MD'].includes(type)) return '📝';
-    if (['ZIP', 'RAR', '7Z'].includes(type)) return '📦';
-    if (['MP4', 'AVI', 'MOV', 'MKV'].includes(type)) return '🎥';
-    if (['MP3', 'WAV', 'OGG'].includes(type)) return '🎵';
-    if (['XLS', 'XLSX', 'CSV'].includes(type)) return '📊';
-    return `📎`;
+    if (type === 'PDF') return 'ðŸ“„';
+    if (['DOC', 'DOCX'].includes(type)) return 'ðŸ“';
+    if (['PPT', 'PPTX'].includes(type)) return 'ðŸ“Š';
+    if (['PNG', 'JPG', 'JPEG', 'GIF', 'SVG', 'WEBP'].includes(type)) return 'ðŸ–¼ï¸';
+    if (['TXT', 'MD'].includes(type)) return 'ðŸ“';
+    if (['ZIP', 'RAR', '7Z'].includes(type)) return 'ðŸ“¦';
+    if (['MP4', 'AVI', 'MOV', 'MKV'].includes(type)) return 'ðŸŽ¥';
+    if (['MP3', 'WAV', 'OGG'].includes(type)) return 'ðŸŽµ';
+    if (['XLS', 'XLSX', 'CSV'].includes(type)) return 'ðŸ“Š';
+    return `ðŸ“Ž`;
   };
 
   const filterMaterials = (materials) => {
@@ -91,7 +81,7 @@ const MaterialsView = () => {
   const canPreview = (fileType) => {
     if (!fileType) return false;
     const type = fileType.toUpperCase();
-    // Preview қолдау: PDF, суреттер, видео, аудио
+    // Preview Ò›Ð¾Ð»Ð´Ð°Ñƒ: PDF, ÑÑƒÑ€ÐµÑ‚Ñ‚ÐµÑ€, Ð²Ð¸Ð´ÐµÐ¾, Ð°ÑƒÐ´Ð¸Ð¾
     return ['PDF', 'PNG', 'JPG', 'JPEG', 'GIF', 'WEBP', 'SVG', 'MP4', 'WEBM', 'MP3', 'WAV', 'OGG', 'TXT'].includes(type);
   };
 
@@ -106,7 +96,7 @@ const MaterialsView = () => {
   if (!classData) {
     return (
       <div className="text-center py-20">
-        <p className="text-gray-600">Деректер табылмады</p>
+        <p className="text-gray-600">Ð”ÐµÑ€ÐµÐºÑ‚ÐµÑ€ Ñ‚Ð°Ð±Ñ‹Ð»Ð¼Ð°Ð´Ñ‹</p>
       </div>
     );
   }
@@ -121,7 +111,7 @@ const MaterialsView = () => {
         className="inline-flex items-center space-x-2 text-primary-600 hover:text-primary-700 mb-6"
       >
         <ArrowLeft className="h-4 w-4" />
-        <span>Артқа қайту</span>
+        <span>ÐÑ€Ñ‚Ò›Ð° Ò›Ð°Ð¹Ñ‚Ñƒ</span>
       </Link>
 
       {/* Header */}
@@ -130,7 +120,7 @@ const MaterialsView = () => {
           <span className="gradient-text">{classData.name}</span>
         </h1>
         <p className="text-gray-600">
-          Тоқсан бойынша материалдарды таңдаңыз
+          Ð¢Ð¾Ò›ÑÐ°Ð½ Ð±Ð¾Ð¹Ñ‹Ð½ÑˆÐ° Ð¼Ð°Ñ‚ÐµÑ€Ð¸Ð°Ð»Ð´Ð°Ñ€Ð´Ñ‹ Ñ‚Ð°Ò£Ð´Ð°Ò£Ñ‹Ð·
         </p>
       </div>
 
@@ -158,19 +148,19 @@ const MaterialsView = () => {
       <div className="glass-card p-4 mb-8">
         <div className="flex items-center space-x-2 mb-3">
           <Filter className="h-5 w-5 text-gray-600" />
-          <h3 className="font-semibold text-gray-700">Файл түрі бойынша фильтрлеу:</h3>
+          <h3 className="font-semibold text-gray-700">Ð¤Ð°Ð¹Ð» Ñ‚Ò¯Ñ€Ñ– Ð±Ð¾Ð¹Ñ‹Ð½ÑˆÐ° Ñ„Ð¸Ð»ÑŒÑ‚Ñ€Ð»ÐµÑƒ:</h3>
         </div>
         <div className="flex flex-wrap gap-2">
           {[
-            { value: 'all', label: 'Барлығы', icon: '📁' },
-            { value: 'text', label: 'Мәтін', icon: '📝' },
-            { value: 'presentation', label: 'Презентация', icon: '📊' },
-            { value: 'image', label: 'Сурет', icon: '🖼️' },
-            { value: 'audio', label: 'Аудио', icon: '🎵' },
-            { value: 'video', label: 'Видео', icon: '🎥' },
-            { value: 'archive', label: 'Архив', icon: '📦' },
-            { value: 'spreadsheet', label: 'Кесте', icon: '📊' },
-            { value: 'other', label: 'Басқа', icon: '📎' }
+            { value: 'all', label: 'Ð‘Ð°Ñ€Ð»Ñ‹Ò“Ñ‹', icon: 'ðŸ“' },
+            { value: 'text', label: 'ÐœÓ™Ñ‚Ñ–Ð½', icon: 'ðŸ“' },
+            { value: 'presentation', label: 'ÐŸÑ€ÐµÐ·ÐµÐ½Ñ‚Ð°Ñ†Ð¸Ñ', icon: 'ðŸ“Š' },
+            { value: 'image', label: 'Ð¡ÑƒÑ€ÐµÑ‚', icon: 'ðŸ–¼ï¸' },
+            { value: 'audio', label: 'ÐÑƒÐ´Ð¸Ð¾', icon: 'ðŸŽµ' },
+            { value: 'video', label: 'Ð’Ð¸Ð´ÐµÐ¾', icon: 'ðŸŽ¥' },
+            { value: 'archive', label: 'ÐÑ€Ñ…Ð¸Ð²', icon: 'ðŸ“¦' },
+            { value: 'spreadsheet', label: 'ÐšÐµÑÑ‚Ðµ', icon: 'ðŸ“Š' },
+            { value: 'other', label: 'Ð‘Ð°ÑÒ›Ð°', icon: 'ðŸ“Ž' }
           ].map((filter) => (
             <button
               key={filter.value}
@@ -204,7 +194,7 @@ const MaterialsView = () => {
               {filteredMaterials.length === 0 ? (
                 <div className="text-center py-8 bg-gray-50 rounded-lg">
                   <p className="text-gray-500">
-                    {materials.length === 0 ? 'Әзірге материалдар жоқ' : 'Таңдалған фильтрге сай материал жоқ'}
+                    {materials.length === 0 ? 'Ó˜Ð·Ñ–Ñ€Ð³Ðµ Ð¼Ð°Ñ‚ÐµÑ€Ð¸Ð°Ð»Ð´Ð°Ñ€ Ð¶Ð¾Ò›' : 'Ð¢Ð°Ò£Ð´Ð°Ð»Ò“Ð°Ð½ Ñ„Ð¸Ð»ÑŒÑ‚Ñ€Ð³Ðµ ÑÐ°Ð¹ Ð¼Ð°Ñ‚ÐµÑ€Ð¸Ð°Ð» Ð¶Ð¾Ò›'}
                   </p>
                 </div>
               ) : (
@@ -238,14 +228,14 @@ const MaterialsView = () => {
                             className="px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium flex items-center space-x-1"
                           >
                             <Eye className="h-4 w-4" />
-                            <span>Көру</span>
+                            <span>ÐšÓ©Ñ€Ñƒ</span>
                           </button>
                         )}
                         <button
                           onClick={() => handleDownload(material)}
                           className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
                         >
-                          Жүктеу
+                          Ð–Ò¯ÐºÑ‚ÐµÑƒ
                         </button>
                       </div>
                     </div>
@@ -253,7 +243,7 @@ const MaterialsView = () => {
                     {/* Files List */}
                     <div className="mt-2 space-y-1">
                       {material.files && material.files.length > 0 ? (
-                        // Бірнеше файл
+                        // Ð‘Ñ–Ñ€Ð½ÐµÑˆÐµ Ñ„Ð°Ð¹Ð»
                         material.files.map((file, index) => (
                           <div key={index} className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded">
                             <div className="flex items-center space-x-2">
@@ -264,20 +254,20 @@ const MaterialsView = () => {
                             </div>
                             {file.fileSize && (
                               <span className="text-gray-400">
-                                {(file.fileSize / 1024 / 1024).toFixed(2)} МБ
+                                {(file.fileSize / 1024 / 1024).toFixed(2)} ÐœÐ‘
                               </span>
                             )}
                           </div>
                         ))
                       ) : (
-                        // Бір файл (ескі формат)
+                        // Ð‘Ñ–Ñ€ Ñ„Ð°Ð¹Ð» (ÐµÑÐºÑ– Ñ„Ð¾Ñ€Ð¼Ð°Ñ‚)
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-gray-500">
                             {getFileIcon(material.fileType)} {material.fileType?.toUpperCase() || 'FILE'}
                           </span>
                           {material.fileSize && (
                             <span className="text-gray-400">
-                              {(material.fileSize / 1024 / 1024).toFixed(2)} МБ
+                              {(material.fileSize / 1024 / 1024).toFixed(2)} ÐœÐ‘
                             </span>
                           )}
                         </div>
@@ -369,13 +359,13 @@ const MaterialsView = () => {
                 className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors flex items-center space-x-2"
               >
                 <Download className="h-4 w-4" />
-                <span>Жүктеу</span>
+                <span>Ð–Ò¯ÐºÑ‚ÐµÑƒ</span>
               </button>
               <button
                 onClick={() => setShowPreview(false)}
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
               >
-                Жабу
+                Ð–Ð°Ð±Ñƒ
               </button>
             </div>
           </div>
@@ -386,3 +376,4 @@ const MaterialsView = () => {
 };
 
 export default MaterialsView;
+

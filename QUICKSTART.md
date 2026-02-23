@@ -1,97 +1,110 @@
-# ⚡ EduHelp - Жылдам Deploy (5 минут)
+# EduHelp Quickstart
 
-## 🎯 Қадамдар:
+## 1. Requirements
+- Node.js 18+
+- MongoDB (local or cloud)
+- npm
 
-### 1. Railway-ге Backend deploy жасау
-
-#### MongoDB қосу:
-```
-1. https://railway.app → Login
-2. New Project → Database → Add MongoDB
-3. Connection String-ті көшіріп алыңыз
-```
-
-#### Backend deploy:
-```
-1. New → GitHub Repo → Edu-help таңдау
-2. Settings → Root Directory: backend
-3. Variables → Төмендегіні қосыңыз:
-
-MONGODB_URI=<Railway-дан көшірген>
-JWT_SECRET=eduhelp_super_secret_key_2025_minimum_32_characters
-PORT=5000
-NODE_ENV=production
-FRONTEND_URL=https://eduhelp.vercel.app
-
-4. Deploy → URL алыңыз (мысалы: eduhelp-backend.up.railway.app)
-```
-
----
-
-### 2. Vercel-ге Frontend deploy жасау
-
-#### Vercel Setup:
-```
-1. https://vercel.com → Login
-2. Add New Project → Import Git Repository
-3. Root Directory: frontend
-4. Framework Preset: Vite
-5. Environment Variables:
-
-VITE_API_URL=https://your-backend.up.railway.app
-
-6. Deploy → URL алыңыз
-```
-
----
-
-### 3. Алғашқы админ тіркеу
-
+## 2. Backend Setup
 ```bash
-curl -X POST https://your-backend.up.railway.app/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "admin",
-    "email": "admin@eduhelp.kz",
-    "password": "Admin123!"
-  }'
+cd backend
+npm install
 ```
 
----
+Create `backend/.env`:
+```env
+MONGODB_URI=mongodb://127.0.0.1:27017/eduhelp
+JWT_SECRET=replace_with_a_long_secret
+NODE_ENV=development
+PORT=5000
 
-### 4. Railway-дегі FRONTEND_URL жаңарту
+# Comma-separated allowlist
+FRONTEND_URL=http://localhost:5173,http://127.0.0.1:5173
 
+# OTP
+OTP_DEBUG=true
+OTP_MAX_ATTEMPTS=5
+OTP_SEND_COOLDOWN_MS=60000
+OTP_VERIFY_LOCK_MS=600000
+
+# Gemini
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.0-flash
+
+# HuggingFace image generation
+HUGGINGFACE_API_KEY=
+
+# Cloudflare R2 (optional in local dev)
+R2_ACCOUNT_ID=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_BUCKET=
+R2_PUBLIC_BASE_URL=
 ```
-Railway → Variables → FRONTEND_URL-ді жаңартыңыз:
-FRONTEND_URL=https://your-site.vercel.app
+
+Run backend:
+```bash
+npm run dev
 ```
 
----
+## 3. Frontend Setup
+```bash
+cd ../frontend
+npm install
+```
 
-## ✅ Дайын!
+Create `frontend/.env`:
+```env
+VITE_API_URL=http://localhost:5000
+```
 
-Сіздің сайт онлайн: **https://your-site.vercel.app**
+Run frontend:
+```bash
+npm run dev
+```
 
-Admin кіру: **https://your-site.vercel.app/admin/login**
+## 4. Login Flow
+- Open `/auth`
+- Send OTP to email
+- Verify OTP
+- If user role is admin, `/admin` unlocks automatically
 
----
+## 5. Migrations
+From `backend/`:
+```bash
+npm run migrate:admin-users
+npm run migrate:materials-files
+```
 
-## 🔧 Егер қате шықса:
+Apply mode:
+```bash
+npm run migrate:admin-users -- --apply
+npm run migrate:materials-files -- --apply
+```
 
-### CORS қатесі:
-Railway → Variables → FRONTEND_URL дұрыс па тексеріңіз
+## 6. Integration Tests
+From `backend/`:
+```bash
+npm test
+```
 
-### MongoDB қосылмайды:
-Railway → MongoDB → Connection String қайта көшіріңіз
+## 7. Bundle Generator
+API:
+```http
+POST /api/ai/generate-bundle
+Authorization: Bearer <token>
+Content-Type: application/json
+```
 
-### API 404 қатесі:
-Vercel → Settings → Environment Variables → VITE_API_URL тексеріңіз
-
----
-
-## 📞 Көмек керек пе?
-
-- Railway: https://railway.app/help
-- Vercel: https://vercel.com/docs
-
-Сәттілік! 🎉
+Body:
+```json
+{
+  "subject": "Math",
+  "classNumber": "6",
+  "quarter": "2",
+  "theme": "Fractions",
+  "objectives": "Understand equivalent fractions",
+  "slidesCount": 8,
+  "worksheetLevel": "standard"
+}
+```
