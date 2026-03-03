@@ -26,7 +26,7 @@ const feedbackSchema = new mongoose.Schema({
   },
   respondedBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Admin'
+    ref: 'User'
   },
   respondedAt: {
     type: Date

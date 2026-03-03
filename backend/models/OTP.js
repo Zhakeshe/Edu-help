@@ -2,25 +2,37 @@ const mongoose = require('mongoose');
 
 const otpSchema = new mongoose.Schema({
   identifier: {
-    type: String, // email
+    type: String,
     required: true,
     lowercase: true,
     trim: true
   },
-  code: {
+  codeHash: {
     type: String,
-    required: true
+    required: true,
+    select: false
   },
   type: {
     type: String,
     enum: ['email'],
     required: true
   },
+  attemptCount: {
+    type: Number,
+    default: 0
+  },
+  maxAttempts: {
+    type: Number,
+    default: 5
+  },
+  cooldownUntil: {
+    type: Date,
+    default: null
+  },
   expiresAt: {
     type: Date,
     required: true,
-    default: () => new Date(Date.now() + 10 * 60 * 1000), // 10 минут
-    index: { expires: 0 } // MongoDB TTL index - автоматты өшіру
+    default: () => new Date(Date.now() + 10 * 60 * 1000)
   },
   verified: {
     type: Boolean,
@@ -32,8 +44,8 @@ const otpSchema = new mongoose.Schema({
   }
 });
 
-// Индекс - жылдам іздеу үшін
-otpSchema.index({ identifier: 1, code: 1 });
-otpSchema.index({ createdAt: 1 }, { expireAfterSeconds: 600 }); // 10 минуттан кейін өшіру
+otpSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+otpSchema.index({ identifier: 1 });
+otpSchema.index({ createdAt: 1 }, { expireAfterSeconds: 600 });
 
 module.exports = mongoose.model('OTP', otpSchema);

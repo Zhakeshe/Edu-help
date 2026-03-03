@@ -1,5 +1,41 @@
 const mongoose = require('mongoose');
 
+const materialFileSchema = new mongoose.Schema({
+  fileName: {
+    type: String,
+    required: true
+  },
+  provider: {
+    type: String,
+    enum: ['r2', 'local'],
+    default: 'r2'
+  },
+  objectKey: {
+    type: String,
+    default: ''
+  },
+  publicUrl: {
+    type: String,
+    default: ''
+  },
+  filePath: {
+    type: String,
+    default: ''
+  },
+  fileType: {
+    type: String,
+    default: ''
+  },
+  contentType: {
+    type: String,
+    default: ''
+  },
+  fileSize: {
+    type: Number,
+    default: 0
+  }
+}, { _id: false });
+
 const materialSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -25,30 +61,17 @@ const materialSchema = new mongoose.Schema({
   category: {
     type: String,
     required: true,
-    enum: ['ҚМЖ', 'Презентациялар', 'Жұмыс парақтары', 'Суреттер', 'Басқа']
+    trim: true
   },
   subject: {
     type: String,
     trim: true
   },
-  // Бірнеше файл қолдауы
-  files: [{
-    fileName: {
-      type: String,
-      required: true
-    },
-    filePath: {
-      type: String,
-      required: true
-    },
-    fileType: {
-      type: String
-    },
-    fileSize: {
-      type: Number
-    }
-  }],
-  // Ескі полялар (backward compatibility үшін)
+  files: {
+    type: [materialFileSchema],
+    default: []
+  },
+  // Legacy fields
   fileName: {
     type: String
   },
@@ -63,7 +86,7 @@ const materialSchema = new mongoose.Schema({
   },
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Admin'
+    ref: 'User'
   },
   downloads: {
     type: Number,
@@ -79,7 +102,6 @@ const materialSchema = new mongoose.Schema({
   }
 });
 
-// Жаңарту датасын автоматты түрде өзгерту
 materialSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();

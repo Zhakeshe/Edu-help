@@ -1,870 +1,717 @@
-import { useState, useEffect, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import { buildApiUrl } from '../config/api';
 import {
+  AlertCircle,
+  Bot,
+  Download,
+  ExternalLink,
+  FileText,
+  Image as ImageIcon,
+  Loader2,
+  Presentation,
   Send,
   Sparkles,
-  Download,
-  FileText,
-  Presentation,
-  Trash2,
-  Loader,
-  AlertCircle,
-  CheckCircle,
-  Bot,
-  User as UserIcon,
-  Plus,
-  MessageSquare,
-  Edit3,
-  X,
-  Image as ImageIcon
+  User as UserIcon
 } from 'lucide-react';
 
-const AIToolsPage = () => {
-  const [activeTab, setActiveTab] = useState('chat');
+const CHAT_STORAGE_KEY = 'eduhelp_ai_chat_history_v2';
+const MAX_HISTORY = 20;
 
-  // Chat state
-  const [conversations, setConversations] = useState([]);
-  const [currentConversationId, setCurrentConversationId] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [inputMessage, setInputMessage] = useState('');
+function resolveAssetUrl(url) {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return buildApiUrl(url);
+}
+
+function extractFallbackTools(error) {
+  return error?.response?.data?.fallback?.freeTools || [];
+}
+
+function extractErrorMessage(error, fallbackText) {
+  return error?.response?.data?.message || fallbackText;
+}
+
+function downloadAsText(filename, content) {
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+const initialKmzhForm = {
+  subject: '',
+  classNumber: '',
+  quarter: '',
+  theme: '',
+  objectives: ''
+};
+
+const initialPresentationForm = {
+  subject: '',
+  theme: '',
+  slides: '8',
+  details: ''
+};
+
+const initialBundleForm = {
+  subject: '',
+  classNumber: '',
+  quarter: '',
+  theme: '',
+  objectives: '',
+  slidesCount: '8',
+  worksheetLevel: 'standard'
+};
+
+const tabItems = [
+  { id: 'chat', label: 'AI Chat' },
+  { id: 'kmzh', label: 'KMZH' },
+  { id: 'presentation', label: 'Presentation' },
+  { id: 'bundle', label: 'Bundle Generator' }
+];
+
+export default function AIToolsPage() {
+  const [activeTab, setActiveTab] = useState('chat');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const messagesEndRef = useRef(null);
+  const [fallbackTools, setFallbackTools] = useState([]);
 
-  // ҚМЖ генерация state
-  const [kmzhData, setKmzhData] = useState({
-    subject: '',
-    classNumber: '',
-    quarter: '',
-    theme: '',
-    objectives: ''
+  const [chatInput, setChatInput] = useState('');
+  const [messages, setMessages] = useState(() => {
+    try {
+      const raw = localStorage.getItem(CHAT_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (_) {
+      return [];
+    }
   });
+  const messageEndRef = useRef(null);
 
-  // Презентация генерация state
-  const [presentationData, setPresentationData] = useState({
-    subject: '',
-    theme: '',
-    slides: '5',
-    details: ''
-  });
+  const [kmzhForm, setKmzhForm] = useState(initialKmzhForm);
+  const [presentationForm, setPresentationForm] = useState(initialPresentationForm);
+  const [bundleForm, setBundleForm] = useState(initialBundleForm);
 
   const [generatedContent, setGeneratedContent] = useState(null);
+  const [bundleResult, setBundleResult] = useState(null);
 
-  // Load conversations on mount
-  useEffect(() => {
-    const savedConversations = localStorage.getItem('eduhelp_conversations');
-    if (savedConversations) {
-      const parsed = JSON.parse(savedConversations);
-      setConversations(parsed);
-
-      // Load last conversation
-      if (parsed.length > 0) {
-        const lastConv = parsed[0];
-        setCurrentConversationId(lastConv.id);
-        setMessages(lastConv.messages);
-      }
-    }
-  }, []);
-
-  // Save conversations to localStorage
-  useEffect(() => {
-    if (conversations.length > 0) {
-      localStorage.setItem('eduhelp_conversations', JSON.stringify(conversations));
-    }
-  }, [conversations]);
-
-  useEffect(() => {
-    scrollToBottom();
+  const chatHistoryPayload = useMemo(() => {
+    return messages.slice(-MAX_HISTORY).map((msg) => ({
+      role: msg.role,
+      content: msg.content
+    }));
   }, [messages]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const resetFeedback = () => {
+    setError('');
+    setFallbackTools([]);
   };
 
-  const createNewConversation = () => {
-    const newConv = {
-      id: Date.now().toString(),
-      title: 'Жаңа чат',
-      messages: [],
-      createdAt: new Date().toISOString()
-    };
-
-    setConversations(prev => [newConv, ...prev]);
-    setCurrentConversationId(newConv.id);
-    setMessages([]);
-  };
-
-  const switchConversation = (convId) => {
-    const conv = conversations.find(c => c.id === convId);
-    if (conv) {
-      setCurrentConversationId(convId);
-      setMessages(conv.messages);
+  const saveMessages = (nextMessages) => {
+    setMessages(nextMessages);
+    try {
+      localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(nextMessages));
+    } catch (_) {
+      // no-op
     }
+    requestAnimationFrame(() => {
+      messageEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    });
   };
 
-  const deleteConversation = (convId) => {
-    if (window.confirm('Чатты өшіруге сенімдісіз бе?')) {
-      const updatedConvs = conversations.filter(c => c.id !== convId);
-      setConversations(updatedConvs);
-
-      if (convId === currentConversationId) {
-        if (updatedConvs.length > 0) {
-          setCurrentConversationId(updatedConvs[0].id);
-          setMessages(updatedConvs[0].messages);
-        } else {
-          setCurrentConversationId(null);
-          setMessages([]);
-        }
-      }
-
-      if (updatedConvs.length === 0) {
-        localStorage.removeItem('eduhelp_conversations');
-      }
-    }
+  const handleApiFailure = (err, fallbackText) => {
+    setError(extractErrorMessage(err, fallbackText));
+    setFallbackTools(extractFallbackTools(err));
   };
 
-  const updateConversationTitle = (convId, newTitle) => {
-    setConversations(prev => prev.map(c =>
-      c.id === convId ? { ...c, title: newTitle } : c
-    ));
-  };
-
-  const sendMessage = async (e) => {
-    e.preventDefault();
-    if (!inputMessage.trim()) return;
+  const sendChatMessage = async (event) => {
+    event.preventDefault();
+    if (!chatInput.trim() || loading) return;
 
     const userMessage = {
       id: Date.now(),
       role: 'user',
-      content: inputMessage,
-      timestamp: new Date().toISOString()
+      content: chatInput.trim()
     };
 
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
-    setInputMessage('');
+    const nextMessages = [...messages, userMessage];
+    saveMessages(nextMessages);
+    setChatInput('');
     setLoading(true);
-    setError('');
+    resetFeedback();
 
     try {
-      const res = await axios.post('/api/ai/chat', {
-        message: inputMessage,
-        history: messages.slice(-10)
+      const response = await axios.post('/api/ai/chat', {
+        message: userMessage.content,
+        history: chatHistoryPayload
       });
 
-      const aiMessage = {
+      const assistantMessage = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: res.data.response,
-        timestamp: new Date().toISOString()
+        content: response.data?.response || 'No response'
       };
 
-      const updatedMessages = [...newMessages, aiMessage];
-      setMessages(updatedMessages);
-
-      // Update conversation
-      if (currentConversationId) {
-        setConversations(prev => prev.map(c => {
-          if (c.id === currentConversationId) {
-            // Auto-generate title from first message
-            const title = c.messages.length === 0
-              ? inputMessage.slice(0, 30) + (inputMessage.length > 30 ? '...' : '')
-              : c.title;
-
-            return { ...c, messages: updatedMessages, title };
-          }
-          return c;
-        }));
-      } else {
-        // Create new conversation
-        const newConv = {
-          id: Date.now().toString(),
-          title: inputMessage.slice(0, 30) + (inputMessage.length > 30 ? '...' : ''),
-          messages: updatedMessages,
-          createdAt: new Date().toISOString()
-        };
-        setConversations(prev => [newConv, ...prev]);
-        setCurrentConversationId(newConv.id);
-      }
-
-    } catch (error) {
-      console.error('Chat қатесі:', error);
-      setError(error.response?.data?.message || 'Қате орын алды. Backend іске қосылғанына көз жеткізіңіз.');
+      saveMessages([...nextMessages, assistantMessage]);
+    } catch (err) {
+      handleApiFailure(err, 'Failed to generate chat response');
+      const failedMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: 'Generation failed. Check fallback tools below.'
+      };
+      saveMessages([...nextMessages, failedMessage]);
     } finally {
       setLoading(false);
     }
   };
 
   const generateImage = async () => {
-    if (!inputMessage.trim()) return;
+    if (!chatInput.trim() || loading) return;
 
     const userMessage = {
       id: Date.now(),
       role: 'user',
-      content: inputMessage,
-      type: 'image_request',
-      timestamp: new Date().toISOString()
+      content: `Image prompt: ${chatInput.trim()}`
     };
 
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
-    setInputMessage('');
+    const nextMessages = [...messages, userMessage];
+    saveMessages(nextMessages);
+    const prompt = chatInput.trim();
+    setChatInput('');
     setLoading(true);
-    setError('');
+    resetFeedback();
 
     try {
-      const res = await axios.post('/api/ai/generate-image', {
-        prompt: inputMessage
-      });
-
-      const aiMessage = {
+      const response = await axios.post('/api/ai/generate-image', { prompt });
+      const imageUrl = resolveAssetUrl(response.data?.imageUrl);
+      const assistantMessage = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: res.data.message || 'Сурет дайын!',
-        imageUrl: res.data.imageUrl,
+        content: response.data?.message || 'Image generated',
         type: 'image',
-        timestamp: new Date().toISOString()
+        imageUrl
       };
-
-      const updatedMessages = [...newMessages, aiMessage];
-      setMessages(updatedMessages);
-
-      // Update conversation
-      if (currentConversationId) {
-        setConversations(prev => prev.map(c => {
-          if (c.id === currentConversationId) {
-            const title = c.messages.length === 0
-              ? '🎨 ' + inputMessage.slice(0, 27) + (inputMessage.length > 27 ? '...' : '')
-              : c.title;
-
-            return { ...c, messages: updatedMessages, title };
-          }
-          return c;
-        }));
-      } else {
-        // Create new conversation
-        const newConv = {
-          id: Date.now().toString(),
-          title: '🎨 ' + inputMessage.slice(0, 27) + (inputMessage.length > 27 ? '...' : ''),
-          messages: updatedMessages,
-          createdAt: new Date().toISOString()
-        };
-        setConversations(prev => [newConv, ...prev]);
-        setCurrentConversationId(newConv.id);
-      }
-
-    } catch (error) {
-      console.error('Сурет генерация қатесі:', error);
-
-      if (error.response?.data?.isLoading) {
-        setError('Модель жүктелуде. 20 секундтан кейін қайталап көріңіз.');
-      } else {
-        setError(error.response?.data?.message || 'Сурет генерация қатесі. HUGGINGFACE_API_KEY қосылғанына көз жеткізіңіз.');
-      }
+      saveMessages([...nextMessages, assistantMessage]);
+    } catch (err) {
+      handleApiFailure(err, 'Failed to generate image');
+      const failedMessage = {
+        id: Date.now() + 1,
+        role: 'assistant',
+        content: 'Image generation failed. Check fallback tools below.'
+      };
+      saveMessages([...nextMessages, failedMessage]);
     } finally {
       setLoading(false);
     }
   };
 
-  const generateKMZH = async (e) => {
-    e.preventDefault();
+  const handleGenerateKmzh = async (event) => {
+    event.preventDefault();
     setLoading(true);
-    setError('');
+    resetFeedback();
     setGeneratedContent(null);
 
     try {
-      const res = await axios.post('/api/ai/generate-kmzh', kmzhData);
+      const response = await axios.post('/api/ai/generate-kmzh', kmzhForm);
       setGeneratedContent({
         type: 'kmzh',
-        content: res.data.content,
-        filename: res.data.filename
+        content: response.data?.content || '',
+        filename: response.data?.filename || 'kmzh.txt'
       });
-    } catch (error) {
-      console.error('ҚМЖ генерация қатесі:', error);
-      setError(error.response?.data?.message || 'Генерация қатесі');
+    } catch (err) {
+      handleApiFailure(err, 'Failed to generate KMZH');
     } finally {
       setLoading(false);
     }
   };
 
-  const generatePresentation = async (e) => {
-    e.preventDefault();
+  const handleGeneratePresentation = async (event) => {
+    event.preventDefault();
     setLoading(true);
-    setError('');
+    resetFeedback();
     setGeneratedContent(null);
 
     try {
-      const res = await axios.post('/api/ai/generate-presentation', presentationData);
+      const response = await axios.post('/api/ai/generate-presentation', presentationForm);
       setGeneratedContent({
         type: 'presentation',
-        content: res.data.content,
-        filename: res.data.filename,
-        pptxUrl: res.data.pptxUrl // Backend will generate .pptx file
+        content: response.data?.content || '',
+        filename: response.data?.filename || 'presentation.txt',
+        pptxUrl: resolveAssetUrl(response.data?.pptxUrl || '')
       });
-    } catch (error) {
-      console.error('Презентация генерация қатесі:', error);
-      setError(error.response?.data?.message || 'Генерация қатесі');
+    } catch (err) {
+      handleApiFailure(err, 'Failed to generate presentation');
     } finally {
       setLoading(false);
     }
   };
 
-  const downloadContent = () => {
-    if (!generatedContent) return;
+  const handleGenerateBundle = async (event) => {
+    event.preventDefault();
+    setLoading(true);
+    resetFeedback();
+    setBundleResult(null);
 
-    const blob = new Blob([generatedContent.content], { type: 'text/plain;charset=utf-8' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = generatedContent.filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    try {
+      const payload = {
+        ...bundleForm,
+        slidesCount: Number(bundleForm.slidesCount || 8)
+      };
+      const response = await axios.post('/api/ai/generate-bundle', payload);
+      setBundleResult(response.data?.data || null);
+    } catch (err) {
+      handleApiFailure(err, 'Failed to generate bundle');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const downloadPPTX = () => {
-    if (!generatedContent?.pptxUrl) return;
-    window.open(generatedContent.pptxUrl, '_blank');
+  const renderFallbackTools = () => {
+    if (!fallbackTools.length) return null;
+
+    return (
+      <div className="glass-card p-5 border border-amber-300 bg-amber-50">
+        <h3 className="font-semibold text-amber-900 mb-3 flex items-center gap-2">
+          <AlertCircle className="h-5 w-5" />
+          Free AI fallback tools
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {fallbackTools.map((tool) => (
+            <a
+              key={`${tool.name}-${tool.url}`}
+              href={tool.url}
+              target="_blank"
+              rel="noreferrer"
+              className="p-3 rounded-lg border border-amber-200 bg-white hover:border-amber-400 transition-colors"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="font-medium text-gray-900">{tool.name}</p>
+                  <p className="text-xs text-gray-500">{tool.category}</p>
+                </div>
+                <ExternalLink className="h-4 w-4 text-amber-700" />
+              </div>
+              <p className="mt-2 text-sm text-gray-700">{tool.description}</p>
+            </a>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="glass-card p-6 mb-8">
-        <div className="flex items-center space-x-4">
-          <div className="bg-gradient-to-r from-primary-500 to-secondary-500 p-4 rounded-full">
-            <Sparkles className="h-8 w-8 text-white" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold gradient-text">AI Нейросеть</h1>
-            <p className="text-gray-600">Edu-help Боты арқылы материалдар жасау</p>
-          </div>
-        </div>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <div className="glass-card p-6">
+        <h1 className="text-3xl font-bold gradient-text mb-1">AI Tools</h1>
+        <p className="text-gray-600">
+          Gemini-first generation with free fallback tools and Bundle Generator.
+        </p>
       </div>
 
-      {/* Tabs */}
-      <div className="glass-card mb-8">
-        <div className="flex border-b border-gray-200">
+      <div className="glass-card p-2 flex flex-wrap gap-2">
+        {tabItems.map((tab) => (
           <button
-            onClick={() => setActiveTab('chat')}
-            className={`flex items-center space-x-2 px-6 py-4 font-medium transition-colors ${
-              activeTab === 'chat'
-                ? 'border-b-2 border-primary-500 text-primary-600'
-                : 'text-gray-600 hover:text-gray-800'
+            key={tab.id}
+            onClick={() => {
+              setActiveTab(tab.id);
+              setError('');
+            }}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              activeTab === tab.id
+                ? 'bg-primary-500 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
-            <Bot className="h-5 w-5" />
-            <span>Чат</span>
+            {tab.label}
           </button>
-          <button
-            onClick={() => setActiveTab('kmzh')}
-            className={`flex items-center space-x-2 px-6 py-4 font-medium transition-colors ${
-              activeTab === 'kmzh'
-                ? 'border-b-2 border-primary-500 text-primary-600'
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
-          >
-            <FileText className="h-5 w-5" />
-            <span>ҚМЖ Генерация</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('presentation')}
-            className={`flex items-center space-x-2 px-6 py-4 font-medium transition-colors ${
-              activeTab === 'presentation'
-                ? 'border-b-2 border-primary-500 text-primary-600'
-                : 'text-gray-600 hover:text-gray-800'
-            }`}
-          >
-            <Presentation className="h-5 w-5" />
-            <span>Презентация</span>
-          </button>
-        </div>
+        ))}
       </div>
 
-      {/* Chat Tab */}
+      {error && (
+        <div className="glass-card p-4 border border-red-300 bg-red-50 text-red-700 flex items-start gap-2">
+          <AlertCircle className="h-5 w-5 mt-0.5" />
+          <span>{error}</span>
+        </div>
+      )}
+
       {activeTab === 'chat' && (
-        <div className="flex gap-4">
-          {/* Sidebar */}
-          {sidebarOpen && (
-            <div className="w-80 glass-card p-4 flex flex-col" style={{ height: '600px' }}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-lg">Чаттар</h3>
-                <button
-                  onClick={createNewConversation}
-                  className="p-2 hover:bg-primary-100 rounded-lg transition-colors"
-                  title="Жаңа чат"
-                >
-                  <Plus className="h-5 w-5 text-primary-600" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto space-y-2">
-                {conversations.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-8">
-                    Әлі чат жоқ
-                  </p>
-                ) : (
-                  conversations.map(conv => (
-                    <div
-                      key={conv.id}
-                      className={`p-3 rounded-lg cursor-pointer transition-colors group ${
-                        conv.id === currentConversationId
-                          ? 'bg-primary-100 border border-primary-300'
-                          : 'hover:bg-gray-100'
-                      }`}
-                      onClick={() => switchConversation(conv.id)}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start space-x-2 flex-1">
-                          <MessageSquare className="h-4 w-4 mt-1 text-gray-500 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">
-                              {conv.title}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {conv.messages.length} хабар
-                            </p>
-                          </div>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteConversation(conv.id);
-                          }}
-                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 rounded transition-opacity"
-                        >
-                          <Trash2 className="h-4 w-4 text-red-600" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Chat Area */}
-          <div className="flex-1 glass-card p-6">
-            {/* Chat header */}
-            <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
-              <div className="flex items-center space-x-3">
-                <div className="bg-gradient-to-br from-primary-500 to-secondary-500 p-2 rounded-full">
-                  <Bot className="h-6 w-6 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-xl font-bold">Edu-help Боты</h2>
-                  <p className="text-xs text-gray-500">Білім беру көмекшісі</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                {sidebarOpen ? <X className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
-              </button>
-            </div>
-
-            {/* Messages */}
-            <div className="h-[450px] overflow-y-auto mb-4 space-y-4 p-4 bg-gray-50 rounded-lg">
-              {messages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                  <Bot className="h-16 w-16 mb-4" />
-                  <p className="text-lg font-medium">Edu-help Ботымен сөйлесуді бастаңыз</p>
-                  <p className="text-sm">Кез келген сұрақ қойыңыз немесе материал сұраңыз</p>
-                </div>
-              ) : (
-                <>
-                  {messages.map((msg) => (
-                    <div
-                      key={msg.id}
-                      className={`flex items-start space-x-3 ${
-                        msg.role === 'user' ? 'justify-end' : 'justify-start'
-                      }`}
-                    >
-                      {msg.role === 'assistant' && (
-                        <div className="bg-gradient-to-br from-primary-500 to-secondary-500 p-2 rounded-full flex-shrink-0">
-                          <Bot className="h-5 w-5 text-white" />
-                        </div>
-                      )}
-                      <div
-                        className={`max-w-[70%] rounded-lg p-4 ${
-                          msg.role === 'user'
-                            ? 'bg-primary-500 text-white'
-                            : 'bg-white border border-gray-200 text-gray-800'
-                        }`}
-                      >
-                        {msg.role === 'assistant' && (
-                          <p className="text-xs font-semibold mb-2 text-primary-600">
-                            Edu-help Боты
-                          </p>
-                        )}
-                        {msg.type === 'image_request' && (
-                          <div className="flex items-center space-x-2 mb-2">
-                            <ImageIcon className="h-4 w-4" />
-                            <span className="text-sm font-medium">Сурет сұрауы:</span>
-                          </div>
-                        )}
-                        <p className="whitespace-pre-wrap">{msg.content}</p>
-                        {msg.imageUrl && (
-                          <div className="mt-3">
-                            <img
-                              src={`http://localhost:5000${msg.imageUrl}`}
-                              alt="Generated"
-                              className="rounded-lg max-w-full h-auto border-2 border-gray-200"
-                              style={{ maxHeight: '400px' }}
-                            />
-                            <a
-                              href={`http://localhost:5000${msg.imageUrl}`}
-                              download
-                              className="inline-flex items-center space-x-2 mt-2 text-sm text-primary-600 hover:text-primary-700"
-                            >
-                              <Download className="h-4 w-4" />
-                              <span>Жүктеу</span>
-                            </a>
-                          </div>
-                        )}
-                        <p className={`text-xs mt-2 ${
-                          msg.role === 'user' ? 'text-primary-100' : 'text-gray-400'
-                        }`}>
-                          {new Date(msg.timestamp).toLocaleTimeString('kk-KZ')}
-                        </p>
-                      </div>
-                      {msg.role === 'user' && (
-                        <div className="bg-gray-600 p-2 rounded-full flex-shrink-0">
-                          <UserIcon className="h-5 w-5 text-white" />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  {loading && (
-                    <div className="flex items-start space-x-3">
-                      <div className="bg-gradient-to-br from-primary-500 to-secondary-500 p-2 rounded-full">
-                        <Bot className="h-5 w-5 text-white" />
-                      </div>
-                      <div className="bg-white border border-gray-200 rounded-lg p-4">
-                        <p className="text-xs font-semibold mb-2 text-primary-600">
-                          Edu-help Боты
-                        </p>
-                        <div className="flex items-center space-x-2">
-                          <Loader className="h-5 w-5 animate-spin text-primary-500" />
-                          <span className="text-gray-600">Жазып жатыр...</span>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <div ref={messagesEndRef} />
-                </>
-              )}
-            </div>
-
-            {/* Error */}
-            {error && (
-              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start space-x-2">
-                <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-red-800">{error}</p>
-                </div>
+        <div className="space-y-4">
+          <div className="glass-card p-5 h-[520px] overflow-y-auto space-y-4">
+            {messages.length === 0 && (
+              <div className="text-center py-20 text-gray-500">
+                Start a prompt for text or image generation.
               </div>
             )}
 
-            {/* Input */}
-            <form onSubmit={sendMessage} className="flex space-x-3">
+            {messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              >
+                {msg.role !== 'user' && (
+                  <div className="w-9 h-9 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center">
+                    <Bot className="h-5 w-5" />
+                  </div>
+                )}
+                <div
+                  className={`max-w-[80%] p-4 rounded-xl ${
+                    msg.role === 'user'
+                      ? 'bg-primary-500 text-white'
+                      : 'bg-gray-100 text-gray-900'
+                  }`}
+                >
+                  <p className="whitespace-pre-wrap">{msg.content}</p>
+                  {msg.type === 'image' && msg.imageUrl && (
+                    <div className="mt-3 space-y-2">
+                      <img
+                        src={msg.imageUrl}
+                        alt="Generated"
+                        className="rounded-lg max-h-72 border border-gray-200"
+                      />
+                      <a
+                        href={msg.imageUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 text-sm underline"
+                      >
+                        Open image
+                        <ExternalLink className="h-4 w-4" />
+                      </a>
+                    </div>
+                  )}
+                </div>
+                {msg.role === 'user' && (
+                  <div className="w-9 h-9 rounded-full bg-secondary-100 text-secondary-700 flex items-center justify-center">
+                    <UserIcon className="h-5 w-5" />
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <div ref={messageEndRef} />
+          </div>
+
+          <form onSubmit={sendChatMessage} className="glass-card p-4">
+            <div className="flex gap-2">
               <input
                 type="text"
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Хабарламаңызды жазыңыз..."
+                value={chatInput}
+                onChange={(event) => setChatInput(event.target.value)}
+                placeholder="Type message or image prompt..."
                 className="input-field flex-1"
-                disabled={loading}
               />
               <button
                 type="button"
                 onClick={generateImage}
-                disabled={loading || !inputMessage.trim()}
-                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-lg flex items-center space-x-2 hover:from-purple-600 hover:to-pink-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Сурет жасау"
+                disabled={loading || !chatInput.trim()}
+                className="px-4 py-2 rounded-lg border-2 border-primary-500 text-primary-600 hover:bg-primary-50 disabled:opacity-50"
               >
                 <ImageIcon className="h-5 w-5" />
-                <span className="hidden sm:inline">Сурет</span>
               </button>
               <button
                 type="submit"
-                disabled={loading || !inputMessage.trim()}
-                className="btn-primary flex items-center space-x-2 disabled:opacity-50"
+                disabled={loading || !chatInput.trim()}
+                className="btn-primary disabled:opacity-50 inline-flex items-center gap-2"
               >
-                <Send className="h-5 w-5" />
-                <span>Жіберу</span>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Send
               </button>
-            </form>
-          </div>
+            </div>
+          </form>
         </div>
       )}
 
       {activeTab === 'kmzh' && (
-        <div className="glass-card p-8">
-          <h2 className="text-2xl font-bold mb-6">ҚМЖ Генерациялау</h2>
-
-          <form onSubmit={generateKMZH} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Пән
-                </label>
-                <input
-                  type="text"
-                  value={kmzhData.subject}
-                  onChange={(e) => setKmzhData({ ...kmzhData, subject: e.target.value })}
-                  className="input-field"
-                  placeholder="Математика"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Сынып
-                </label>
-                <select
-                  value={kmzhData.classNumber}
-                  onChange={(e) => setKmzhData({ ...kmzhData, classNumber: e.target.value })}
-                  className="input-field"
-                  required
-                >
-                  <option value="">Таңдаңыз</option>
-                  {[2,3,4,5,6,7,8,9,10,11].map(num => (
-                    <option key={num} value={num}>{num} сынып</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Тоқсан
-                </label>
-                <select
-                  value={kmzhData.quarter}
-                  onChange={(e) => setKmzhData({ ...kmzhData, quarter: e.target.value })}
-                  className="input-field"
-                  required
-                >
-                  <option value="">Таңдаңыз</option>
-                  <option value="1">1 тоқсан</option>
-                  <option value="2">2 тоқсан</option>
-                  <option value="3">3 тоқсан</option>
-                  <option value="4">4 тоқсан</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Тақырып
-                </label>
-                <input
-                  type="text"
-                  value={kmzhData.theme}
-                  onChange={(e) => setKmzhData({ ...kmzhData, theme: e.target.value })}
-                  className="input-field"
-                  placeholder="Көбейту кестесі"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Сабақтың мақсаты (опциялық)
-              </label>
-              <textarea
-                value={kmzhData.objectives}
-                onChange={(e) => setKmzhData({ ...kmzhData, objectives: e.target.value })}
+        <div className="space-y-4">
+          <form onSubmit={handleGenerateKmzh} className="glass-card p-6 space-y-4">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary-600" />
+              KMZH generator
+            </h2>
+            <div className="grid md:grid-cols-2 gap-4">
+              <input
                 className="input-field"
-                rows="3"
-                placeholder="Оқушылар көбейту кестесін үйренеді..."
+                placeholder="Subject"
+                value={kmzhForm.subject}
+                onChange={(event) => setKmzhForm((prev) => ({ ...prev, subject: event.target.value }))}
+                required
+              />
+              <input
+                className="input-field"
+                placeholder="Class number"
+                value={kmzhForm.classNumber}
+                onChange={(event) => setKmzhForm((prev) => ({ ...prev, classNumber: event.target.value }))}
+                required
+              />
+              <input
+                className="input-field"
+                placeholder="Quarter"
+                value={kmzhForm.quarter}
+                onChange={(event) => setKmzhForm((prev) => ({ ...prev, quarter: event.target.value }))}
+                required
+              />
+              <input
+                className="input-field"
+                placeholder="Theme"
+                value={kmzhForm.theme}
+                onChange={(event) => setKmzhForm((prev) => ({ ...prev, theme: event.target.value }))}
+                required
               />
             </div>
-
-            {error && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
-                <AlertCircle className="h-5 w-5 text-red-600" />
-                <span className="text-red-800">{error}</span>
-              </div>
-            )}
-
-            {generatedContent?.type === 'kmzh' && (
-              <div className="p-6 bg-green-50 border border-green-200 rounded-lg">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-2 text-green-700">
-                    <CheckCircle className="h-5 w-5" />
-                    <span className="font-semibold">ҚМЖ дайын!</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={downloadContent}
-                    className="btn-primary flex items-center space-x-2"
-                  >
-                    <Download className="h-4 w-4" />
-                    <span>Жүктеу</span>
-                  </button>
-                </div>
-                <div className="bg-white p-4 rounded-lg max-h-96 overflow-y-auto">
-                  <pre className="whitespace-pre-wrap text-sm text-gray-800">
-                    {generatedContent.content}
-                  </pre>
-                </div>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full flex items-center justify-center space-x-2 disabled:opacity-50"
-            >
-              {loading ? (
-                <>
-                  <Loader className="h-5 w-5 animate-spin" />
-                  <span>Генерациялануда...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-5 w-5" />
-                  <span>ҚМЖ жасау</span>
-                </>
-              )}
+            <textarea
+              className="input-field resize-none"
+              rows={4}
+              placeholder="Objectives"
+              value={kmzhForm.objectives}
+              onChange={(event) => setKmzhForm((prev) => ({ ...prev, objectives: event.target.value }))}
+            />
+            <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              Generate KMZH
             </button>
           </form>
+
+          {generatedContent?.type === 'kmzh' && (
+            <div className="glass-card p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold">KMZH output</h3>
+                <button
+                  onClick={() => downloadAsText(generatedContent.filename, generatedContent.content)}
+                  className="btn-primary inline-flex items-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download
+                </button>
+              </div>
+              <pre className="bg-gray-50 rounded-lg p-4 overflow-x-auto text-sm whitespace-pre-wrap">
+                {generatedContent.content}
+              </pre>
+            </div>
+          )}
         </div>
       )}
 
       {activeTab === 'presentation' && (
-        <div className="glass-card p-8">
-          <h2 className="text-2xl font-bold mb-6">Презентация Генерациялау</h2>
-
-          <form onSubmit={generatePresentation} className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Пән
-              </label>
+        <div className="space-y-4">
+          <form onSubmit={handleGeneratePresentation} className="glass-card p-6 space-y-4">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <Presentation className="h-5 w-5 text-primary-600" />
+              Presentation generator
+            </h2>
+            <div className="grid md:grid-cols-2 gap-4">
               <input
-                type="text"
-                value={presentationData.subject}
-                onChange={(e) => setPresentationData({ ...presentationData, subject: e.target.value })}
                 className="input-field"
-                placeholder="Математика"
+                placeholder="Subject"
+                value={presentationForm.subject}
+                onChange={(event) => setPresentationForm((prev) => ({ ...prev, subject: event.target.value }))}
+                required
+              />
+              <input
+                className="input-field"
+                placeholder="Theme"
+                value={presentationForm.theme}
+                onChange={(event) => setPresentationForm((prev) => ({ ...prev, theme: event.target.value }))}
+                required
+              />
+              <input
+                className="input-field"
+                placeholder="Slides count"
+                value={presentationForm.slides}
+                onChange={(event) => setPresentationForm((prev) => ({ ...prev, slides: event.target.value }))}
                 required
               />
             </div>
+            <textarea
+              className="input-field resize-none"
+              rows={4}
+              placeholder="Details"
+              value={presentationForm.details}
+              onChange={(event) => setPresentationForm((prev) => ({ ...prev, details: event.target.value }))}
+            />
+            <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              Generate presentation
+            </button>
+          </form>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Тақырып
-              </label>
+          {generatedContent?.type === 'presentation' && (
+            <div className="glass-card p-6 space-y-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  onClick={() => downloadAsText(generatedContent.filename, generatedContent.content)}
+                  className="btn-primary inline-flex items-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  Download summary
+                </button>
+                {generatedContent.pptxUrl && (
+                  <a
+                    href={generatedContent.pptxUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-4 py-2 rounded-lg border-2 border-primary-500 text-primary-600 hover:bg-primary-50 inline-flex items-center gap-2"
+                  >
+                    <Presentation className="h-4 w-4" />
+                    Download PPTX
+                  </a>
+                )}
+              </div>
+              <pre className="bg-gray-50 rounded-lg p-4 overflow-x-auto text-sm whitespace-pre-wrap">
+                {generatedContent.content}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'bundle' && (
+        <div className="space-y-4">
+          <form onSubmit={handleGenerateBundle} className="glass-card p-6 space-y-4">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary-600" />
+              Bundle Generator
+            </h2>
+            <p className="text-sm text-gray-600">
+              Generate KMZH + presentation + worksheet markdown + worksheet PDF in one request.
+            </p>
+
+            <div className="grid md:grid-cols-2 gap-4">
               <input
-                type="text"
-                value={presentationData.theme}
-                onChange={(e) => setPresentationData({ ...presentationData, theme: e.target.value })}
                 className="input-field"
-                placeholder="Пифагор теоремасы"
+                placeholder="Subject"
+                value={bundleForm.subject}
+                onChange={(event) => setBundleForm((prev) => ({ ...prev, subject: event.target.value }))}
                 required
               />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Слайдтар саны
-              </label>
+              <input
+                className="input-field"
+                placeholder="Class number"
+                value={bundleForm.classNumber}
+                onChange={(event) => setBundleForm((prev) => ({ ...prev, classNumber: event.target.value }))}
+                required
+              />
+              <input
+                className="input-field"
+                placeholder="Quarter"
+                value={bundleForm.quarter}
+                onChange={(event) => setBundleForm((prev) => ({ ...prev, quarter: event.target.value }))}
+                required
+              />
+              <input
+                className="input-field"
+                placeholder="Theme"
+                value={bundleForm.theme}
+                onChange={(event) => setBundleForm((prev) => ({ ...prev, theme: event.target.value }))}
+                required
+              />
+              <input
+                className="input-field"
+                placeholder="Slides count"
+                value={bundleForm.slidesCount}
+                onChange={(event) => setBundleForm((prev) => ({ ...prev, slidesCount: event.target.value }))}
+              />
               <select
-                value={presentationData.slides}
-                onChange={(e) => setPresentationData({ ...presentationData, slides: e.target.value })}
                 className="input-field"
-                required
+                value={bundleForm.worksheetLevel}
+                onChange={(event) => setBundleForm((prev) => ({ ...prev, worksheetLevel: event.target.value }))}
               >
-                <option value="5">5 слайд</option>
-                <option value="10">10 слайд</option>
-                <option value="15">15 слайд</option>
-                <option value="20">20 слайд</option>
+                <option value="basic">Basic</option>
+                <option value="standard">Standard</option>
+                <option value="advanced">Advanced</option>
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Қосымша ақпарат (опциялық)
-              </label>
-              <textarea
-                value={presentationData.details}
-                onChange={(e) => setPresentationData({ ...presentationData, details: e.target.value })}
-                className="input-field"
-                rows="4"
-                placeholder="Презентацияға қосқыңыз келетін ақпарат..."
-              />
-            </div>
+            <textarea
+              className="input-field resize-none"
+              rows={4}
+              placeholder="Objectives"
+              value={bundleForm.objectives}
+              onChange={(event) => setBundleForm((prev) => ({ ...prev, objectives: event.target.value }))}
+            />
 
-            {error && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex items-center space-x-2">
-                <AlertCircle className="h-5 w-5 text-red-600" />
-                <span className="text-red-800">{error}</span>
-              </div>
-            )}
+            <button type="submit" className="btn-primary inline-flex items-center gap-2" disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              Generate bundle
+            </button>
+          </form>
 
-            {generatedContent?.type === 'presentation' && (
-              <div className="p-6 bg-green-50 border border-green-200 rounded-lg">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-2 text-green-700">
-                    <CheckCircle className="h-5 w-5" />
-                    <span className="font-semibold">Презентация дайын!</span>
-                  </div>
-                  <div className="flex space-x-2">
-                    {generatedContent.pptxUrl && (
-                      <button
-                        type="button"
-                        onClick={downloadPPTX}
-                        className="btn-primary flex items-center space-x-2"
-                      >
-                        <Download className="h-4 w-4" />
-                        <span>.PPTX жүктеу</span>
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={downloadContent}
-                      className="btn-secondary flex items-center space-x-2"
+          {bundleResult && (
+            <div className="glass-card p-6 space-y-5">
+              <h3 className="font-semibold text-lg">Bundle output</h3>
+
+              <div className="grid md:grid-cols-2 gap-3">
+                {[
+                  { key: 'kmzh', label: 'KMZH TXT', icon: FileText },
+                  { key: 'presentation', label: 'Presentation PPTX', icon: Presentation },
+                  { key: 'worksheetMarkdown', label: 'Worksheet Markdown', icon: FileText },
+                  { key: 'worksheetPdf', label: 'Worksheet PDF', icon: FileText }
+                ].map((item) => {
+                  const file = bundleResult.bundle?.[item.key];
+                  const Icon = item.icon;
+                  if (!file?.url) return null;
+                  return (
+                    <a
+                      key={item.key}
+                      href={resolveAssetUrl(file.url)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-3 rounded-lg border border-gray-200 hover:border-primary-400 transition-colors bg-white flex items-center justify-between gap-3"
                     >
-                      <Download className="h-4 w-4" />
-                      <span>.TXT жүктеу</span>
-                    </button>
-                  </div>
+                      <div className="flex items-center gap-2">
+                        <Icon className="h-5 w-5 text-primary-600" />
+                        <div>
+                          <p className="font-medium text-gray-900">{item.label}</p>
+                          <p className="text-xs text-gray-500">{file.fileName}</p>
+                        </div>
+                      </div>
+                      <Download className="h-4 w-4 text-primary-600" />
+                    </a>
+                  );
+                })}
+              </div>
+
+              <div className="grid lg:grid-cols-2 gap-4">
+                <div>
+                  <p className="font-medium mb-2">KMZH preview</p>
+                  <pre className="bg-gray-50 rounded-lg p-4 overflow-x-auto text-xs whitespace-pre-wrap max-h-80">
+                    {bundleResult.preview?.kmzhText || '-'}
+                  </pre>
                 </div>
-                <div className="bg-white p-4 rounded-lg max-h-96 overflow-y-auto">
-                  <pre className="whitespace-pre-wrap text-sm text-gray-800">
-                    {generatedContent.content}
+                <div>
+                  <p className="font-medium mb-2">Worksheet markdown preview</p>
+                  <pre className="bg-gray-50 rounded-lg p-4 overflow-x-auto text-xs whitespace-pre-wrap max-h-80">
+                    {bundleResult.preview?.worksheetMarkdown || '-'}
                   </pre>
                 </div>
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full flex items-center justify-center space-x-2 disabled:opacity-50"
-            >
-              {loading ? (
-                <>
-                  <Loader className="h-5 w-5 animate-spin" />
-                  <span>Генерациялануда...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-5 w-5" />
-                  <span>Презентация жасау (.PPTX)</span>
-                </>
-              )}
-            </button>
-          </form>
+              <div>
+                <p className="font-medium mb-2">Slides preview</p>
+                <div className="space-y-2">
+                  {(bundleResult.preview?.slides || []).map((slide, index) => (
+                    <div key={`${slide.title}-${index}`} className="p-3 rounded-lg border border-gray-200 bg-gray-50">
+                      <p className="font-medium">{index + 1}. {slide.title}</p>
+                      <ul className="mt-1 text-sm text-gray-700 list-disc list-inside">
+                        {(slide.content || []).map((line, contentIndex) => (
+                          <li key={`${index}-${contentIndex}`}>{line}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
+
+      {renderFallbackTools()}
     </div>
   );
-};
-
-export default AIToolsPage;
+}

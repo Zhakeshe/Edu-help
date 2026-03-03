@@ -85,7 +85,14 @@ const Auth = () => {
       if (res.data.success) {
         // Token арқылы кіру
         loginWithToken(res.data.data.token, res.data.data);
-        navigate(from, { replace: true });
+
+        // Роліне қарап бағыттау
+        const userRole = res.data.data.role;
+        if (userRole === 'admin') {
+          navigate('/admin', { replace: true });
+        } else {
+          navigate(from, { replace: true });
+        }
       }
     } catch (err) {
       const errorData = err.response?.data;
@@ -235,7 +242,7 @@ const Auth = () => {
 
               {/* Identifier көрсету */}
               <div className="text-center py-3 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">Код жіберілді:</p>
+                <p className="text-sm text-gray-600">Код жіберілді(Келмесе Спам почта тексеріңіз):</p>
                 <p className="text-lg font-semibold text-gray-800">{identifier}</p>
               </div>
 

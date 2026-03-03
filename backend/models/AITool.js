@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+﻿const mongoose = require('mongoose');
 
 const aiToolSchema = new mongoose.Schema({
   name: {
@@ -13,7 +13,7 @@ const aiToolSchema = new mongoose.Schema({
   category: {
     type: String,
     required: true,
-    enum: ['Сурет генерациялау', 'Мәтін генерациялау', 'Видео генерациялау', 'Аудио генерациялау', 'Басқа']
+    trim: true
   },
   url: {
     type: String,
@@ -25,7 +25,7 @@ const aiToolSchema = new mongoose.Schema({
   },
   apiKey: {
     type: String,
-    select: false // API кілтін қалыпты сұрауларда көрсетпейміз
+    select: false // API ÐºÑ–Ð»Ñ‚Ñ–Ð½ Ò›Ð°Ð»Ñ‹Ð¿Ñ‚Ñ‹ ÑÒ±Ñ€Ð°ÑƒÐ»Ð°Ñ€Ð´Ð° ÐºÓ©Ñ€ÑÐµÑ‚Ð¿ÐµÐ¹Ð¼Ñ–Ð·
   },
   features: [{
     type: String
@@ -58,3 +58,4 @@ const aiToolSchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.model('AITool', aiToolSchema);
+

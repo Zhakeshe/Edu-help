@@ -2,79 +2,142 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
+const fsp = require('fs').promises;
+const mime = require('mime-types');
 const Material = require('../models/Material');
 const { protect, adminOnly } = require('../middleware/auth');
-
-// Multer конфигурациясы
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, 'uploads/');
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
-
-const fileFilter = (req, file, cb) => {
-  // Барлық файл типтеріне рұқсат беру
-  // Тек қауіпті файлдарды блоктау (.exe, .bat, .sh, т.б.)
-  const dangerousTypes = /\.exe$|\.bat$|\.cmd$|\.sh$|\.app$/i;
-  const isDangerous = dangerousTypes.test(file.originalname);
-
-  if (isDangerous) {
-    cb(new Error('Қауіпті файл типі! .exe, .bat, .cmd, .sh файлдар рұқсат етілмейді.'));
-  } else {
-    cb(null, true); // Барлық басқа файлдарға рұқсат
-  }
-};
+const {
+  isR2Configured,
+  uploadBuffer,
+  deleteObject,
+  getObjectSignedUrl,
+  inferContentType
+} = require('../services/storage/r2Storage');
 
 const upload = multer({
-  storage: storage,
-  fileFilter: fileFilter,
-  limits: { fileSize: 100 * 1024 * 1024 } // 100MB
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    const dangerousTypes = /\.exe$|\.bat$|\.cmd$|\.sh$|\.app$/i;
+    if (dangerousTypes.test(file.originalname)) {
+      cb(new Error('??????? ???? ????! .exe, .bat, .cmd, .sh ??????? ?????? ?????????.'));
+      return;
+    }
+
+    cb(null, true);
+  },
+  limits: { fileSize: Number(process.env.FILE_MAX_BYTES || 100 * 1024 * 1024) }
 });
 
-// @route   POST /api/upload
-// @desc    Файл(дар) жүктеу (бірнеше файл қолдауымен)
-// @access  Private (Тек админдер)
+function buildLegacyLocalFile(material) {
+  if (!material?.filePath) return null;
+  const isHttpUrl = /^https?:\/\//i.test(material.filePath);
+  return {
+    provider: isHttpUrl ? 'r2' : 'local',
+    fileName: material.fileName || path.basename(material.filePath),
+    filePath: isHttpUrl ? '' : material.filePath,
+    publicUrl: isHttpUrl ? material.filePath : '',
+    fileType: material.fileType || path.extname(material.filePath).replace('.', '').toLowerCase(),
+    fileSize: material.fileSize || 0,
+    contentType: inferContentType(material.fileName || material.filePath)
+  };
+}
+
+function resolvePrimaryFile(material) {
+  if (Array.isArray(material.files) && material.files.length > 0) {
+    return material.files[0];
+  }
+
+  return buildLegacyLocalFile(material);
+}
+
+async function saveLocalFromBuffer(file) {
+  const uploadsDir = path.join(__dirname, '../uploads');
+  await fsp.mkdir(uploadsDir, { recursive: true });
+
+  const ext = path.extname(file.originalname);
+  const uniqueFileName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+  const filePath = path.join(uploadsDir, uniqueFileName);
+
+  await fsp.writeFile(filePath, file.buffer);
+
+  return {
+    provider: 'local',
+    fileName: file.originalname,
+    filePath,
+    fileType: ext.replace('.', '').toLowerCase(),
+    contentType: file.mimetype || inferContentType(file.originalname),
+    fileSize: file.size
+  };
+}
+
 router.post('/upload', protect, adminOnly, upload.array('files', 20), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Файл(дар) таңдалмады'
+        message: '????(???) ??????????'
       });
     }
 
     const { title, description, classNumber, quarter, category, subject } = req.body;
 
-    // Барлық файлдарды files массивіне жинау
-    const filesArray = req.files.map(file => ({
-      fileName: file.originalname,
-      filePath: file.path,
-      fileType: path.extname(file.originalname).toLowerCase().replace('.', ''),
-      fileSize: file.size
-    }));
+    if (!title || !classNumber || !quarter || !category) {
+      return res.status(400).json({
+        success: false,
+        message: '???????, ?????, ?????? ???? ????????? ????????'
+      });
+    }
 
-    // Backward compatibility үшін - бірінші файлды негізгі полярға қосамыз
-    const firstFile = req.files[0];
-    const fileType = path.extname(firstFile.originalname).toLowerCase().replace('.', '');
+    const allowLocalFallback = process.env.ALLOW_LOCAL_STORAGE_FALLBACK === 'true';
+    if (!isR2Configured && !allowLocalFallback) {
+      return res.status(503).json({
+        success: false,
+        message: 'R2 storage ?????????????? ???. R2 env ????????????? ?????????.'
+      });
+    }
+
+    const filesArray = [];
+
+    for (const file of req.files) {
+      if (isR2Configured) {
+        const uploaded = await uploadBuffer({
+          buffer: file.buffer,
+          originalName: file.originalname,
+          folder: 'materials',
+          contentType: file.mimetype
+        });
+
+        filesArray.push({
+          provider: uploaded.provider,
+          objectKey: uploaded.objectKey,
+          publicUrl: uploaded.publicUrl || '',
+          fileName: file.originalname,
+          fileType: path.extname(file.originalname).replace('.', '').toLowerCase(),
+          contentType: uploaded.contentType,
+          fileSize: file.size,
+          filePath: ''
+        });
+      } else {
+        filesArray.push(await saveLocalFromBuffer(file));
+      }
+    }
+
+    const firstFile = filesArray[0];
 
     const material = await Material.create({
       title,
       description,
-      classNumber: parseInt(classNumber),
-      quarter: parseInt(quarter),
+      classNumber: parseInt(classNumber, 10),
+      quarter: parseInt(quarter, 10),
       category,
       subject,
-      // Бірнеше файл
       files: filesArray,
-      // Backward compatibility үшін
-      fileName: firstFile.originalname,
-      filePath: firstFile.path,
-      fileType,
-      fileSize: firstFile.size,
+      // legacy fields for backward compatibility
+      fileName: firstFile.fileName,
+      filePath: firstFile.filePath || firstFile.publicUrl,
+      fileType: firstFile.fileType,
+      fileSize: firstFile.fileSize,
       uploadedBy: req.user._id
     });
 
@@ -86,28 +149,25 @@ router.post('/upload', protect, adminOnly, upload.array('files', 20), async (req
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Файл жүктеу қатесі',
+      message: '???? ?????? ??????',
       error: error.message
     });
   }
 });
 
-// @route   GET /api/materials
-// @desc    Барлық материалдарды алу (фильтрлеумен)
-// @access  Public
 router.get('/', async (req, res) => {
   try {
     const { classNumber, quarter, category, subject } = req.query;
 
-    let filter = {};
+    const filter = {};
 
-    if (classNumber) filter.classNumber = parseInt(classNumber);
-    if (quarter) filter.quarter = parseInt(quarter);
+    if (classNumber) filter.classNumber = parseInt(classNumber, 10);
+    if (quarter) filter.quarter = parseInt(quarter, 10);
     if (category) filter.category = category;
     if (subject) filter.subject = subject;
 
     const materials = await Material.find(filter)
-      .populate('uploadedBy', 'username')
+      .populate('uploadedBy', 'fullName email')
       .sort({ createdAt: -1 });
 
     res.json({
@@ -118,15 +178,12 @@ router.get('/', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Материалдарды алу қатесі',
+      message: '????????????? ??? ??????',
       error: error.message
     });
   }
 });
 
-// @route   GET /api/materials/preview/:id
-// @desc    Материалды браузерде көру (preview)
-// @access  Public
 router.get('/preview/:id', async (req, res) => {
   try {
     const material = await Material.findById(req.params.id);
@@ -134,49 +191,59 @@ router.get('/preview/:id', async (req, res) => {
     if (!material) {
       return res.status(404).json({
         success: false,
-        message: 'Материал табылмады'
+        message: '???????? ?????????'
       });
     }
 
-    // MIME type анықтау
-    const fs = require('fs');
-    const mimeTypes = {
-      'pdf': 'application/pdf',
-      'jpg': 'image/jpeg',
-      'jpeg': 'image/jpeg',
-      'png': 'image/png',
-      'gif': 'image/gif',
-      'webp': 'image/webp',
-      'svg': 'image/svg+xml',
-      'mp4': 'video/mp4',
-      'webm': 'video/webm',
-      'mp3': 'audio/mpeg',
-      'wav': 'audio/wav',
-      'ogg': 'audio/ogg',
-      'txt': 'text/plain',
-      'html': 'text/html',
-      'css': 'text/css',
-      'js': 'application/javascript'
-    };
+    const file = resolvePrimaryFile(material);
+    if (!file) {
+      return res.status(404).json({
+        success: false,
+        message: '???? ???? ?????????'
+      });
+    }
 
-    const contentType = mimeTypes[material.fileType] || 'application/octet-stream';
+    if (file.provider === 'r2' && file.objectKey) {
+      const signedUrl = await getObjectSignedUrl(file.objectKey, { expiresIn: 900 });
+      return res.redirect(signedUrl);
+    }
 
-    // Файлды оқу және жіберу
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', 'inline'); // Браузерде ашу
-    fs.createReadStream(material.filePath).pipe(res);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Файлды көрсету қатесі',
-      error: error.message
+    if (file.provider === 'r2' && file.publicUrl) {
+      return res.redirect(file.publicUrl);
+    }
+
+    if (!file.filePath || !fs.existsSync(file.filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: '???? ???????? ?????????'
+      });
+    }
+
+    res.setHeader('Content-Type', file.contentType || mime.lookup(file.fileName) || 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'inline');
+
+    const stream = fs.createReadStream(file.filePath);
+    stream.on('error', (err) => {
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          message: '?????? ??? ??????? ???? ????? ?????',
+          error: err.message
+        });
+      }
     });
+    stream.pipe(res);
+  } catch (error) {
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: '?????? ??????? ??????',
+        error: error.message
+      });
+    }
   }
 });
 
-// @route   GET /api/materials/download/:id
-// @desc    Материалды жүктеп алу
-// @access  Public
 router.get('/download/:id', async (req, res) => {
   try {
     const material = await Material.findById(req.params.id);
@@ -184,36 +251,69 @@ router.get('/download/:id', async (req, res) => {
     if (!material) {
       return res.status(404).json({
         success: false,
-        message: 'Материал табылмады'
+        message: '???????? ?????????'
       });
     }
 
-    // Жүктеу санағышын көбейту
+    const file = resolvePrimaryFile(material);
+    if (!file) {
+      return res.status(404).json({
+        success: false,
+        message: '???? ???? ?????????'
+      });
+    }
+
     material.downloads += 1;
     await material.save();
 
-    res.download(material.filePath, material.fileName);
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: 'Файлды жүктеу қатесі',
-      error: error.message
+    if (file.provider === 'r2' && file.objectKey) {
+      const signedUrl = await getObjectSignedUrl(file.objectKey, {
+        expiresIn: 900,
+        downloadFileName: file.fileName
+      });
+      return res.redirect(signedUrl);
+    }
+
+    if (file.provider === 'r2' && file.publicUrl) {
+      return res.redirect(file.publicUrl);
+    }
+
+    if (!file.filePath || !fs.existsSync(file.filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: '???? ???????? ?????????'
+      });
+    }
+
+    res.download(file.filePath, file.fileName, (err) => {
+      if (err && !res.headersSent) {
+        res.status(500).json({
+          success: false,
+          message: '?????? ?????? ??????? ???? ????? ?????',
+          error: err.message
+        });
+      }
     });
+  } catch (error) {
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: '?????? ?????? ??????',
+        error: error.message
+      });
+    }
   }
 });
 
-// @route   GET /api/materials/:id
-// @desc    Бір материалды алу
-// @access  Public
 router.get('/:id', async (req, res) => {
   try {
     const material = await Material.findById(req.params.id)
-      .populate('uploadedBy', 'username email');
+      .populate('uploadedBy', 'fullName email');
 
     if (!material) {
       return res.status(404).json({
         success: false,
-        message: 'Материал табылмады'
+        message: '???????? ?????????'
       });
     }
 
@@ -224,15 +324,12 @@ router.get('/:id', async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Материалды алу қатесі',
+      message: '?????????? ??? ??????',
       error: error.message
     });
   }
 });
 
-// @route   PUT /api/materials/:id
-// @desc    Материалды жаңарту
-// @access  Private (Тек админдер)
 router.put('/:id', protect, adminOnly, async (req, res) => {
   try {
     const material = await Material.findByIdAndUpdate(
@@ -244,7 +341,7 @@ router.put('/:id', protect, adminOnly, async (req, res) => {
     if (!material) {
       return res.status(404).json({
         success: false,
-        message: 'Материал табылмады'
+        message: '???????? ?????????'
       });
     }
 
@@ -255,15 +352,12 @@ router.put('/:id', protect, adminOnly, async (req, res) => {
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Материалды жаңарту қатесі',
+      message: '?????????? ??????? ??????',
       error: error.message
     });
   }
 });
 
-// @route   DELETE /api/materials/:id
-// @desc    Материалды өшіру
-// @access  Private (Тек админдер)
 router.delete('/:id', protect, adminOnly, async (req, res) => {
   try {
     const material = await Material.findById(req.params.id);
@@ -271,26 +365,46 @@ router.delete('/:id', protect, adminOnly, async (req, res) => {
     if (!material) {
       return res.status(404).json({
         success: false,
-        message: 'Материал табылмады'
+        message: '???????? ?????????'
       });
     }
 
-    // Файлды файл жүйесінен өшіру
-    const fs = require('fs');
-    if (fs.existsSync(material.filePath)) {
-      fs.unlinkSync(material.filePath);
+    const files = Array.isArray(material.files) ? material.files : [];
+
+    for (const file of files) {
+      if (file.provider === 'r2' && file.objectKey) {
+        try {
+          await deleteObject(file.objectKey);
+        } catch (err) {
+          console.error('R2 delete error:', err.message);
+        }
+      } else if (file.filePath && fs.existsSync(file.filePath)) {
+        try {
+          fs.unlinkSync(file.filePath);
+        } catch (err) {
+          console.error('Local delete error:', err.message);
+        }
+      }
+    }
+
+    if (material.filePath && fs.existsSync(material.filePath)) {
+      try {
+        fs.unlinkSync(material.filePath);
+      } catch (err) {
+        console.error('Legacy local delete error:', err.message);
+      }
     }
 
     await material.deleteOne();
 
     res.json({
       success: true,
-      message: 'Материал өшірілді'
+      message: '???????? ????????'
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Материалды өшіру қатесі',
+      message: '?????????? ????? ??????',
       error: error.message
     });
   }
